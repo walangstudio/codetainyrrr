@@ -1,0 +1,29 @@
+# Secrets — actual environment, never the template
+.env
+.env*
+!env.example
+
+# Default project mount (your code lives here, not the container's)
+workspace/
+
+# OS detritus
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor swap / backup files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Logs and temp
+*.log
+tmp/
+temp/
+*.tmp
+
+# Local build/test artifacts
+*.tgz
+*.tar.gz
