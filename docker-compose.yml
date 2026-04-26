@@ -1,0 +1,125 @@
+name: codetainyrrr
+
+# ---------------------------------------------------------------------------
+# Named volumes — persist the container home directory across runs.
+#
+#   ct_home   /home/dev — everything: tool installs, CLI config, shell state
+#
+# On first run Docker seeds the volume from the image's /home/dev, so all
+# the pre-created directories are already there. To start fresh, wipe this
+# one volume: docker volume rm codetainyrrr_ct_home
+#
+# To share ~/.claude with Claude Desktop on the host, set CLAUDE_DIR in .env —
+# run.sh / run.ps1 will overlay a bind-mount on top of this volume.
+# ---------------------------------------------------------------------------
+volumes:
+  ct_home:
+
+# ---------------------------------------------------------------------------
+# Networks — isolated bridge by default.
+# To connect to a project's containers, use ./run.sh --network <name>
+# or uncomment the example block and add it to the service networks list.
+# ---------------------------------------------------------------------------
+networks:
+  codetainyrrr_default:
+    name: codetainyrrr_default
+    driver: bridge
+
+  # Example external network:
+  # my_project_net:
+  #   name: my_project_default
+  #   external: true
+
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        HOST_UID: ${HOST_UID:-1000}
+        HOST_GID: ${HOST_GID:-1000}
+        USERNAME: dev
+        # System tools baked into image — set to "true" and run ./run.sh --build
+        INSTALL_CPP:  ${INSTALL_CPP:-false}
+        INSTALL_PHP:  ${INSTALL_PHP:-false}
+        INSTALL_RUBY: ${INSTALL_RUBY:-false}
+    image: codetainyrrr:local
+
+    container_name: codetainyrrr
+    hostname: codetainyrrr
+
+    stdin_open: true
+    tty: true
+    restart: "no"
+
+    environment:
+      # UID/GID for the in-container dev user. Entrypoint chowns /home/dev and
+      # gosu-drops to this UID; mismatched values produce HOME=/ inside.
+      - HOST_UID=${HOST_UID:-1000}
+      - HOST_GID=${HOST_GID:-1000}
+
+      # CLI: claude | codex | gemini | opencode | pi | goose | aider | kilo | cn
+      - CODING_CLI=${CODING_CLI:-claude}
+
+      # Dev tools installed at container start (home-dir installable):
+      # java, go, rust, ts, react, svelte, python, deno, bun, dotnet,lazygit
+      # System tools (cpp, php, ruby) go in INSTALL_CPP/PHP/RUBY above.
+      - INSTALL_TOOLS=${INSTALL_TOOLS:-}
+
+      # Plugins: caveman,context-mode,claude-mem,claude-hud,ccusage,graphify,
+      #          mempalace,everything-claude-code,karpathy-skills,owner/repo,npm:pkg,uv:pkg
+      - INSTALL_PLUGINS=${INSTALL_PLUGINS:-}
+
+      # API keys
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      # - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      # - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      # - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+      # - GROQ_API_KEY=${GROQ_API_KEY:-}
+
+      - GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME:-}
+      - GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL:-}
+      - GIT_COMMITTER_NAME=${GIT_AUTHOR_NAME:-}
+      - GIT_COMMITTER_EMAIL=${GIT_AUTHOR_EMAIL:-}
+
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-}
+
+      - HOME=/home/dev
+      - USER=dev
+
+    volumes:
+      # Primary workspace — mounts at /workspace/<dirname> so projects sit side by side.
+      # run.sh / run.ps1 resolve the dirname automatically from PROJECT_DIR.
+      # If running docker compose directly, adjust the target path to match your project name.
+      - ${PROJECT_DIR:-./workspace}:/workspace/workspace:z
+
+      # Additional workspaces — each mounts at /workspace/<dirname>.
+      # Managed by run.sh / run.ps1 from EXTRA_WORKSPACES in .env.
+      # Cannot be declared statically here because the list is dynamic.
+
+      # Single home volume — persists everything: tools, CLI state, shell config.
+      # Set CLAUDE_DIR in .env to overlay ~/.claude with a host bind-mount instead.
+      - ct_home:/home/dev
+
+    cap_drop:
+      - ALL
+
+    # Minimum caps for the entrypoint's gosu drop. CHOWN fixes /home/dev
+    # ownership; SETUID/SETGID let gosu switch to the dev user. After gosu
+    # exec's, the dev process holds none of these.
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+
+    security_opt:
+      - no-new-privileges:true
+
+    networks:
+      - codetainyrrr_default
+      # - my_project_net
+
+    working_dir: /workspace/workspace
