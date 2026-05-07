@@ -30,3 +30,8 @@ temp/
 # Local build/test artifacts
 *.tgz
 *.tar.gz
+
+# Rust build output
+target/
+# Keep Cargo.lock for reproducible builds (binary crate)
+
