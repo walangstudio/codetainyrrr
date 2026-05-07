@@ -32,7 +32,8 @@ pub fn read(kind: &str, key: &str) -> Option<SentinelData> {
 
 pub fn mark(kind: &str, key: &str, spec: &str, version: Option<String>) -> Result<()> {
     let p = sentinel_path(kind, key);
-    std::fs::create_dir_all(p.parent().unwrap())?;
+    let dir = p.parent().ok_or_else(|| anyhow::anyhow!("sentinel path has no parent: {}", p.display()))?;
+    std::fs::create_dir_all(dir)?;
     let data = SentinelData {
         version,
         installed_at: chrono::Utc::now().to_rfc3339(),

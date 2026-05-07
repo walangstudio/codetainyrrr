@@ -10,7 +10,11 @@ pub async fn add(key: String) -> Result<()> {
     let cfg = loader::load(&root)?;
     let env_path = root.join(".env");
     let mut env = EnvFile::load(&env_path)?;
-    let cli = env.get("CODING_CLI").to_string();
+    let cli = if env.get("CODING_CLI").is_empty() {
+        std::env::var("CODING_CLI").unwrap_or_default()
+    } else {
+        env.get("CODING_CLI").to_string()
+    };
 
     let plugin = cfg
         .catalog
@@ -71,7 +75,8 @@ pub async fn list() -> Result<()> {
     let root = crate::config::locate_root();
     let cfg = loader::load(&root)?;
     let env = EnvFile::load(&root.join(".env"))?;
-    let cli = env.get("CODING_CLI");
+    let cli_from_env = std::env::var("CODING_CLI").unwrap_or_default();
+    let cli = if env.get("CODING_CLI").is_empty() { cli_from_env.as_str() } else { env.get("CODING_CLI") };
     let installed = sentinel::list_kind("plugins");
 
     println!("Plugins (CLI: {cli}):");

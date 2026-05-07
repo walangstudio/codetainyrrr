@@ -1,20 +1,11 @@
 /// Handler for `git:<url>:<install_to>` specs.
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 
-use super::run_sh;
+use super::{expand_home, run_sh};
 use crate::installer::{InstallStatus, Installer};
 
 pub struct GitCloneHandler;
-
-fn expand_home(path: &str) -> Result<String> {
-    if let Some(rest) = path.strip_prefix("$HOME/") {
-        let home = dirs::home_dir().context("no home dir")?;
-        Ok(home.join(rest).to_string_lossy().into_owned())
-    } else {
-        Ok(path.to_owned())
-    }
-}
 
 #[async_trait]
 impl Installer for GitCloneHandler {

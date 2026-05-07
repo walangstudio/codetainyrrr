@@ -12,8 +12,20 @@ pub mod sdkman;
 pub mod shell;
 pub mod uv;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use tokio::process::Command;
+
+/// Expand `~/` and `$HOME/` prefixes to the actual home directory.
+pub(crate) fn expand_home(path: &str) -> Result<String> {
+    let home = dirs::home_dir().context("could not determine home directory")?;
+    if let Some(rest) = path.strip_prefix("~/").or_else(|| path.strip_prefix("$HOME/")) {
+        return Ok(home.join(rest).to_string_lossy().into_owned());
+    }
+    if path == "~" || path == "$HOME" {
+        return Ok(home.to_string_lossy().into_owned());
+    }
+    Ok(path.to_owned())
+}
 
 /// Run a shell command, streaming stdout/stderr, returning error if non-zero.
 pub(crate) async fn run_cmd(program: &str, args: &[&str]) -> Result<()> {
