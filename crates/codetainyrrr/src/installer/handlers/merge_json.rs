@@ -4,6 +4,7 @@
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 
+use super::expand_home;
 use crate::installer::{InstallStatus, Installer};
 
 pub struct MergeJsonHandler;
@@ -59,19 +60,6 @@ impl Installer for MergeJsonHandler {
 
     async fn status(&self, _key: &str) -> Result<InstallStatus> {
         Ok(InstallStatus::Missing)
-    }
-}
-
-fn expand_home(path: &str) -> Result<String> {
-    if let Some(rest) = path.strip_prefix("~/") {
-        let home = dirs::home_dir().context("no home dir")?;
-        Ok(home.join(rest).to_string_lossy().into_owned())
-    } else if path == "~" {
-        dirs::home_dir()
-            .context("no home dir")
-            .map(|h| h.to_string_lossy().into_owned())
-    } else {
-        Ok(path.to_owned())
     }
 }
 

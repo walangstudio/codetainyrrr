@@ -78,7 +78,7 @@ async fn start(container: &str, env: &EnvFile, extra_args: Vec<String>) -> Resul
     }
 
     // Forward INSTALL_TOOLS / INSTALL_PLUGINS / CODING_CLI for entrypoint
-    for key in &["CODING_CLI", "INSTALL_TOOLS", "INSTALL_PLUGINS", "WIRE_CCSTATUSLINE",
+    for key in &["CODING_CLI", "INSTALL_TOOLS", "INSTALL_PLUGINS",
                  "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL"] {
         let val = env.get(key);
         args.push("-e".to_string());
