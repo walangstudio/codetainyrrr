@@ -6,7 +6,7 @@ use crate::installer::registry::{self, Kind};
 use crate::installer::sentinel;
 
 pub async fn add(key: String) -> Result<()> {
-    let root = std::env::current_dir()?;
+    let root = crate::config::locate_root();
     let cfg = loader::load(&root)?;
     let env_path = root.join(".env");
     let mut env = EnvFile::load(&env_path)?;
@@ -41,7 +41,7 @@ pub async fn add(key: String) -> Result<()> {
 }
 
 pub async fn remove(key: String) -> Result<()> {
-    let root = std::env::current_dir()?;
+    let root = crate::config::locate_root();
     let cfg = loader::load(&root)?;
     let env_path = root.join(".env");
     let mut env = EnvFile::load(&env_path)?;
@@ -68,7 +68,7 @@ pub async fn remove(key: String) -> Result<()> {
 }
 
 pub async fn list() -> Result<()> {
-    let root = std::env::current_dir()?;
+    let root = crate::config::locate_root();
     let cfg = loader::load(&root)?;
     let env = EnvFile::load(&root.join(".env"))?;
     let cli = env.get("CODING_CLI");

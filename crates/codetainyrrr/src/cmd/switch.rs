@@ -5,7 +5,7 @@ use crate::envfile::EnvFile;
 use crate::installer::registry::{self, Kind};
 
 pub async fn run(cli: String) -> Result<()> {
-    let root = std::env::current_dir()?;
+    let root = crate::config::locate_root();
     let cfg = loader::load(&root)?;
 
     let env_path = root.join(".env");

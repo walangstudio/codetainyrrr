@@ -8,8 +8,7 @@ use crate::config::loader;
 use crate::installer::registry::{self, Kind};
 
 pub async fn run(_reconcile: bool, daemon: bool) -> Result<()> {
-    // Look for catalog.json in / (container root) or /etc/codetainyrrr/
-    let root = locate_root();
+    let root = crate::config::locate_root();
     let cfg = loader::load(&root)?;
 
     let coding_cli      = std::env::var("CODING_CLI").unwrap_or_else(|_| "claude".to_string());
@@ -90,13 +89,3 @@ async fn install_one(kind_label: &str, key: &str, spec: &str, kind: Kind) -> Res
     }
 }
 
-fn locate_root() -> std::path::PathBuf {
-    // Inside the container, catalog.json is at /catalog.json or /etc/codetainyrrr/
-    for candidate in ["/etc/codetainyrrr", "/", "."] {
-        let p = std::path::Path::new(candidate);
-        if p.join("catalog.json").exists() {
-            return p.to_path_buf();
-        }
-    }
-    std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
-}
