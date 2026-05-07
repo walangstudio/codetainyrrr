@@ -1,8 +1,5 @@
 mod cmd;
-mod config;
-mod envfile;
-mod installer;
-mod wizard;
+use codetainyrrr::*;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
