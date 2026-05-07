@@ -11,7 +11,7 @@
 ///   git:<url>:<install_to>              → GitCloneHandler
 ///   apt:<packages>                      → AptHandler
 ///   python:tools                        → PythonHandler
-///   wire-ccstatusline:<cmd>             → WireCcstatuslineHandler
+///   merge-json:<path>:<cmd>             → MergeJsonHandler
 ///   marketplace:<repo>:<plugin>[:<mkt>] → MarketplaceHandler
 ///   curl -fsSL <url> | bash             → ShellPipeHandler
 use anyhow::{bail, Result};
@@ -23,13 +23,13 @@ use super::handlers::{
     github_release::GithubReleaseHandler,
     go_lang::GoHandler,
     marketplace::MarketplaceHandler,
+    merge_json::MergeJsonHandler,
     npm::NpmHandler,
     nvm::NvmHandler,
     python::PythonHandler,
     sdkman::SdkmanHandler,
     shell::ShellPipeHandler,
     uv::UvHandler,
-    wire_ccstatusline::WireCcstatuslineHandler,
 };
 use super::{InstallStatus, Installer};
 use crate::installer::sentinel;
@@ -87,7 +87,7 @@ fn handler_for(spec: &str) -> Result<Box<dyn Installer>> {
     if spec.starts_with("git:")               { return Ok(Box::new(GitCloneHandler)); }
     if spec.starts_with("apt:")               { return Ok(Box::new(AptHandler)); }
     if spec.starts_with("python:")            { return Ok(Box::new(PythonHandler)); }
-    if spec.starts_with("wire-ccstatusline:") { return Ok(Box::new(WireCcstatuslineHandler)); }
+    if spec.starts_with("merge-json:")          { return Ok(Box::new(MergeJsonHandler)); }
     if spec.starts_with("marketplace:")       { return Ok(Box::new(MarketplaceHandler)); }
     if spec.contains("| bash") || spec.contains("| sh") || spec.starts_with("curl") {
         return Ok(Box::new(ShellPipeHandler));

@@ -12,10 +12,9 @@ pub async fn run(_reconcile: bool, daemon: bool) -> Result<()> {
     let root = locate_root();
     let cfg = loader::load(&root)?;
 
-    let coding_cli    = std::env::var("CODING_CLI").unwrap_or_else(|_| "claude".to_string());
-    let install_tools = std::env::var("INSTALL_TOOLS").unwrap_or_default();
+    let coding_cli      = std::env::var("CODING_CLI").unwrap_or_else(|_| "claude".to_string());
+    let install_tools   = std::env::var("INSTALL_TOOLS").unwrap_or_default();
     let install_plugins = std::env::var("INSTALL_PLUGINS").unwrap_or_default();
-    let wire_cc = std::env::var("WIRE_CCSTATUSLINE").unwrap_or_default() == "true";
 
     // Install CLI
     if let Some(cli_entry) = cfg.catalog.clis.iter().find(|c| c.key == coding_cli) {
@@ -44,11 +43,6 @@ pub async fn run(_reconcile: bool, daemon: bool) -> Result<()> {
                 install_one("plugin", key, spec, Kind::Plugin).await?;
             }
         }
-    }
-
-    // Wire ccstatusline if requested
-    if wire_cc && coding_cli == "claude" {
-        install_one("plugin", "wire-ccstatusline", "wire-ccstatusline", Kind::Plugin).await?;
     }
 
     if daemon {

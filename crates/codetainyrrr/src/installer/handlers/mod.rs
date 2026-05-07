@@ -4,13 +4,13 @@ pub mod git_clone;
 pub mod github_release;
 pub mod go_lang;
 pub mod marketplace;
+pub mod merge_json;
 pub mod npm;
 pub mod nvm;
 pub mod python;
 pub mod sdkman;
 pub mod shell;
 pub mod uv;
-pub mod wire_ccstatusline;
 
 use anyhow::Result;
 use tokio::process::Command;
