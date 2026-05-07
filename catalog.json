@@ -118,8 +118,8 @@
       "install": "gh:jesseduffield/lazygit:*Linux_x86_64.tar.gz" }
   ],
   "plugins": [
-    { "key": "wire-ccstatusline",      "category": "Claude Code", "default": true,  "supported_clis": ["claude"], "description": "Wire ccstatusline status bar into Claude Code",
-      "install": "wire-ccstatusline:npx -y ccstatusline@latest" },
+    { "key": "ccstatusline",            "category": "Claude Code", "default": true,  "supported_clis": ["claude"], "description": "Status bar token/cost overlay for Claude Code",
+      "install": "merge-json:~/.claude/settings.json:npx -y ccstatusline@latest" },
     { "key": "ccusage",                "category": "Claude Code", "default": false, "supported_clis": ["claude"], "description": "Dashboard for session cost & token usage",
       "install": "npm:ccusage" },
     { "key": "caveman",                "category": "Plugins",     "default": false, "supported_clis": ["claude"], "description": "Token saver - caveman-speak output (~70% fewer tokens)",

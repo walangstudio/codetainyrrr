@@ -145,7 +145,7 @@ pub async fn run_wizard(
             .map(|t| t.key.as_str())
             .collect();
 
-        let mut ms = multiselect(format!("{}  {}", page.title, page.description));
+        let mut ms = multiselect(format!("{}  {}", page.title, page.description)).filter_mode();
         for t in &filtered {
             ms = ms.item(t.key.as_str(), t.description.as_str(), t.category.as_str());
         }
@@ -158,36 +158,22 @@ pub async fn run_wizard(
         let page = wizard.pages.iter().find(|p| p.id == "plugins").unwrap();
         let cli  = env.get("CODING_CLI").to_string();
         let current_plugins = env.keys_csv("INSTALL_PLUGINS");
-        let wire_cc = env.get("WIRE_CCSTATUSLINE") == "true";
-
-        let mut current_with_cc = current_plugins.clone();
-        if wire_cc && !current_with_cc.contains(&"wire-ccstatusline".to_string()) {
-            current_with_cc.insert(0, "wire-ccstatusline".to_string());
-        }
 
         let filtered: Vec<_> = catalog.plugins.iter().filter(|p| p.supports_cli(&cli)).collect();
         let initial: Vec<&str> = filtered
             .iter()
             .filter(|p| {
-                if current_plugins.is_empty() && !wire_cc {
-                    p.default
-                } else {
-                    current_with_cc.contains(&p.key)
-                }
+                if current_plugins.is_empty() { p.default } else { current_plugins.contains(&p.key) }
             })
             .map(|p| p.key.as_str())
             .collect();
 
-        let mut ms = multiselect(format!("{}  {}", page.title, page.description));
+        let mut ms = multiselect(format!("{}  {}", page.title, page.description)).filter_mode();
         for p in &filtered {
             ms = ms.item(p.key.as_str(), p.description.as_str(), p.category.as_str());
         }
         let plugins: Vec<&str> = ms.initial_values(initial).interact()?;
-
-        let wire = plugins.contains(&"wire-ccstatusline");
-        let without_cc: Vec<_> = plugins.iter().filter(|&&p| p != "wire-ccstatusline").copied().collect();
-        env.set("WIRE_CCSTATUSLINE", if wire { "true" } else { "false" });
-        env.set("INSTALL_PLUGINS", &without_cc.join(","));
+        env.set("INSTALL_PLUGINS", &plugins.join(","));
     }
 
     // ── Page 8: Custom configs ────────────────────────────────────────────────

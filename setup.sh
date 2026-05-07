@@ -430,7 +430,6 @@ PROJECT_DIR="$(_e PROJECT_DIR "")"
 EXTRA_WORKSPACES="$(_e EXTRA_WORKSPACES "")"
 CLAUDE_DIR="$(_e CLAUDE_DIR "")"
 CLAUDE_JSON="$(_e CLAUDE_JSON "")"
-WIRE_CCSTATUSLINE="$(_e WIRE_CCSTATUSLINE true)"
 ANTHROPIC_API_KEY="$(_e ANTHROPIC_API_KEY "")"
 OPENAI_API_KEY="$(_e OPENAI_API_KEY "")"
 OPENROUTER_API_KEY="$(_e OPENROUTER_API_KEY "")"
@@ -562,50 +561,20 @@ while [ "$step" -le "$maxstep" ]; do
     7) # ── Plugins ─────────────────────────────────────────────────────────
         h "Step 7/$maxstep  $(_wp plugins title)"
         dim "$(_wp plugins description)"
-        if [ "$CODING_CLI" = "claude" ]; then
-            # Re-inject wire-ccstatusline so re-runs restore checked state from WIRE_CCSTATUSLINE.
-            if [ "$WIRE_CCSTATUSLINE" = "true" ] && [[ ",$INSTALL_PLUGINS," != *",wire-ccstatusline,"* ]]; then
-                [ -n "$INSTALL_PLUGINS" ] && INSTALL_PLUGINS="wire-ccstatusline,$INSTALL_PLUGINS" || INSTALL_PLUGINS="wire-ccstatusline"
-            fi
-            mapfile -t _plugin_args < <(
-                _catalog_plugins | jq -r --arg cli "$CODING_CLI" '
-                    [ .[] | select(
-                        (.supported_clis // ["*"]) | (index("*") != null or index($cli) != null)
-                    )] |
-                    [ group_by(.category)[] |
-                        ("---" + .[0].category),
-                        (.[] | .key + "|" + (if .default then "1" else "0" end) + "|" + .description)
-                    ] | .[]
-                '
-            )
-            tui_multiselect INSTALL_PLUGINS "Pick plugins (Claude)" "${_plugin_args[@]}"
-            if [[ ",$INSTALL_PLUGINS," == *",wire-ccstatusline,"* ]]; then
-                WIRE_CCSTATUSLINE=true
-                INSTALL_PLUGINS="${INSTALL_PLUGINS//wire-ccstatusline,/}"
-                INSTALL_PLUGINS="${INSTALL_PLUGINS//,wire-ccstatusline/}"
-                INSTALL_PLUGINS="${INSTALL_PLUGINS//wire-ccstatusline/}"
-            else
-                WIRE_CCSTATUSLINE=false
-            fi
-        else
-            dim "Plugins are filtered by supported CLI. Add plugins for $CODING_CLI in catalog.user.json."
-            mapfile -t _plugin_args < <(
-                _catalog_plugins | jq -r --arg cli "$CODING_CLI" '
-                    [ .[] | select(
-                        (.supported_clis // ["*"]) | (index("*") != null or index($cli) != null)
-                    )] |
-                    [ group_by(.category)[] |
-                        ("---" + .[0].category),
-                        (.[] | .key + "|" + (if .default then "1" else "0" end) + "|" + .description)
-                    ] | .[]
-                '
-            )
-            tui_multiselect INSTALL_PLUGINS "Pick plugins ($CODING_CLI)" "${_plugin_args[@]}"
-            WIRE_CCSTATUSLINE=false
-        fi
+        mapfile -t _plugin_args < <(
+            _catalog_plugins | jq -r --arg cli "$CODING_CLI" '
+                [ .[] | select(
+                    (.supported_clis // ["*"]) | (index("*") != null or index($cli) != null)
+                )] |
+                [ group_by(.category)[] |
+                    ("---" + .[0].category),
+                    (.[] | .key + "|" + (if .default then "1" else "0" end) + "|" + .description)
+                ] | .[]
+            '
+        )
+        tui_multiselect INSTALL_PLUGINS "Pick plugins" "${_plugin_args[@]}"
         [ "$GO_BACK" -eq 1 ] && { step=$((step - 1)); continue; }
         dim "Custom plugins: append owner/repo, npm:pkg, or uv:pkg to INSTALL_PLUGINS in .env"
-        [ "$WIRE_CCSTATUSLINE" = "true" ] && ok "ccstatusline: wired"
         [ -n "$INSTALL_PLUGINS" ] && ok "Plugins: $INSTALL_PLUGINS" || dim "  Plugins: none"
         ;;
 
@@ -677,7 +646,6 @@ HOST_GID=$HOST_GID
 # ── AI CLI ──────────────────────────────────────────────────────────────────
 # Options: $_cli_keys
 CODING_CLI=$CODING_CLI
-WIRE_CCSTATUSLINE=$WIRE_CCSTATUSLINE
 CONTAINER_NAME=$CONTAINER_NAME
 
 # ── Paths ────────────────────────────────────────────────────────────────────

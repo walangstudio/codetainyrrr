@@ -415,7 +415,6 @@ $ProjectDir         = E "PROJECT_DIR" ""
 $ExtraWorkspaces    = E "EXTRA_WORKSPACES" ""
 $ClaudeDir          = E "CLAUDE_DIR" ""
 $ClaudeJson         = E "CLAUDE_JSON" ""
-$WireCcstatusline   = E "WIRE_CCSTATUSLINE" "true"
 $AnthropicKey       = E "ANTHROPIC_API_KEY" ""
 $OpenAIKey          = E "OPENAI_API_KEY" ""
 $OpenRouterKey      = E "OPENROUTER_API_KEY" ""
@@ -549,30 +548,10 @@ while ($step -le $maxStep) {
             # -- 7. Plugins --------------------------------------------------------
             Write-Header "Step 7/$maxStep - $(Get-WizPage 'plugins' 'title')"
             Write-Dim (Get-WizPage 'plugins' 'description')
-            if ($CodingCLI -eq "claude") {
-                # Re-inject wire-ccstatusline so re-runs restore checked state from WireCcstatusline.
-                if ($WireCcstatusline -eq "true" -and ($InstallPlugins -split ',') -notcontains "wire-ccstatusline") {
-                    $InstallPlugins = if ($InstallPlugins -ne "") { "wire-ccstatusline,$InstallPlugins" } else { "wire-ccstatusline" }
-                }
-                $filteredPlugins = Get-MergedCatalog "plugins" | Where-Object { Test-SupportsCli $_ $CodingCLI }
-                $result = Invoke-TuiMultiselect "Pick plugins (Claude)" (Build-MultiSelectOptions $filteredPlugins) $InstallPlugins
-                if ($script:GoBack) { $step--; continue }
-                if ($result -match '(^|,)wire-ccstatusline(,|$)') {
-                    $WireCcstatusline = "true"
-                    $result = ($result -split ',' | Where-Object { $_ -ne "wire-ccstatusline" }) -join ','
-                } else {
-                    $WireCcstatusline = "false"
-                }
-                $InstallPlugins = $result
-            } else {
-                Write-Dim "Plugins are filtered by supported CLI. Add plugins for $CodingCLI in catalog.user.json."
-                $filteredPlugins = Get-MergedCatalog "plugins" | Where-Object { Test-SupportsCli $_ $CodingCLI }
-                $result = Invoke-TuiMultiselect "Pick plugins ($CodingCLI)" (Build-MultiSelectOptions $filteredPlugins) $InstallPlugins
-                if ($script:GoBack) { $step--; continue }
-                $WireCcstatusline = "false"
-                $InstallPlugins = $result
-            }
-            if ($WireCcstatusline -eq "true") { Write-Ok "ccstatusline: wired" }
+            $filteredPlugins = Get-MergedCatalog "plugins" | Where-Object { Test-SupportsCli $_ $CodingCLI }
+            $result = Invoke-TuiMultiselect "Pick plugins" (Build-MultiSelectOptions $filteredPlugins) $InstallPlugins
+            if ($script:GoBack) { $step--; continue }
+            $InstallPlugins = $result
             if ($InstallPlugins -ne "") { Write-Ok "Plugins: $InstallPlugins" } else { Write-Dim "  Plugins: none" }
         }
         8 {
@@ -647,7 +626,6 @@ HOST_GID=$HostGID
 # -- AI CLI ------------------------------------------------------------------
 # Options: $cliKeys
 CODING_CLI=$CodingCLI
-WIRE_CCSTATUSLINE=$WireCcstatusline
 CONTAINER_NAME=$ContainerName
 
 # -- Paths --------------------------------------------------------------------
