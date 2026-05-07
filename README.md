@@ -263,9 +263,13 @@ INSTALL_TOOLS=python,deno,bun
 
 | Value | What installs | Where it lives |
 |---|---|---|
+| `rtk` | RTK - optimized ls/grep/git for AI agents | `~/.local/bin` volume |
 | `java` | SDKMan + Java LTS | `~/.sdkman` volume |
 | `go` | Go SDK (latest stable) | `~/go` volume |
 | `rust` | rustup + stable toolchain | `~/.rustup`, `~/.cargo` volumes |
+| `node` | Node LTS via NVM | `~/.nvm` volume |
+| `pnpm` | pnpm via corepack | `~/.nvm` volume |
+| `yarn` | Yarn via corepack | `~/.nvm` volume |
 | `ts` | TypeScript, ts-node, tsx (via npm) | `~/.nvm` volume |
 | `react` | Vite, create-react-app (via npm) | `~/.nvm` volume |
 | `svelte` | SvelteKit (via npm) | `~/.nvm` volume |

@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.7
 FROM debian:bookworm-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -71,9 +70,10 @@ USER ${USERNAME}
 
 # Pre-create home subdirs owned by the dev user so volume seeding has the right structure.
 RUN mkdir -p \
+    ~/.cache \
     ~/.nvm \
     ~/.sdkman \
-    ~/.config \
+    ~/.config/zsh \
     ~/.local/bin \
     ~/.claude \
     ~/.continue \
@@ -89,6 +89,11 @@ RUN mkdir -p \
     ~/.gemini \
     ~/workspaces
 
+# Bake .zshrc into the image so connecting immediately gets a proper shell
+# with correct PATH, aliases, and auto-launch logic. Plugins (zsh-autosuggestions,
+# starship) are sourced if present — installed lazily into the home volume.
+COPY --chown=${USERNAME}:${USERNAME} scripts/zshrc /home/${USERNAME}/.zshrc
+
 # Switch back to root — entrypoint starts as root, fixes /home/dev ownership,
 # then drops to the dev user via gosu before running any user code.
 USER root
@@ -96,6 +101,7 @@ USER root
 WORKDIR /workspace
 
 COPY scripts/entrypoint.sh /entrypoint.sh
+COPY catalog.json /catalog.json
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

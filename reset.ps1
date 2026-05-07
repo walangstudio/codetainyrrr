@@ -26,10 +26,10 @@ function Write-Dim($msg)   { Write-Host "    $msg" -ForegroundColor DarkGray }
 function Write-Banner($msg){ Write-Host $msg -ForegroundColor Red }
 
 # ── auto-detect project names from volumes ────────────────────────────────────
-$AllVols = docker volume ls -q 2>$null
+$AllVols = @(docker volume ls -q 2>&1 | Where-Object { $_ -is [string] })
 $DetectedNames = @(
-    $AllVols | Where-Object { $_ -match "_ct_home$" } |
-    ForEach-Object { $_ -replace "_ct_home$", "" } |
+    $AllVols | Where-Object { $_ -match "_ct_home" -and $_ -notmatch "_test_ct_home" } |
+    ForEach-Object { $_ -replace "_ct_home.*$", "" } |
     Sort-Object -Unique
 )
 
@@ -64,15 +64,16 @@ if ($DetectedNames.Count -gt 1) {
 $ImageName = "codetainyrrr:local"
 
 if ($PluginsOnly) {
-    docker volume inspect "${ProjectName}_ct_home" 2>$null | Out-Null
-    if ($LASTEXITCODE -ne 0) {
+    $volCheck = $true
+    try { docker volume inspect "${ProjectName}_ct_home" 2>&1 | Out-Null } catch { $volCheck = $false }
+    if (-not $volCheck -or $LASTEXITCODE -ne 0) {
         Write-Host "No volume '${ProjectName}_ct_home' to clean. Nothing to reset."
         exit 0
     }
     $TargetVols = @()
     $ResetLabel = "plugins only"
 } else {
-    $TargetVols = @($AllVols | Where-Object { $_ -match "^${ProjectName}_ct_home$" })
+    $TargetVols = @($AllVols | Where-Object { $_ -match "^${ProjectName}_ct_home" -and $_ -notmatch "^${ProjectName}_test_ct_home" })
     $ResetLabel = "full"
     if ($TargetVols.Count -eq 0) {
         Write-Host "No matching volume found for '${ProjectName}'. Nothing to reset."
@@ -112,7 +113,7 @@ if (-not $PluginsOnly) {
     Write-Info "Plugin sentinels will be cleared from ${ProjectName}_ct_home"
     Write-Host ""
     Write-Host "  This will:" -ForegroundColor White
-    Write-Warn "Remove all plugin install sentinels — plugins re-install on next start"
+    Write-Warn "Remove all plugin install sentinels - plugins re-install on next start"
     Write-Host ""
     Write-Host "  This will NOT affect:" -ForegroundColor Cyan
     Write-Info "Installed tool versions (Node, Python, Go, Rust, etc.)"
@@ -150,12 +151,14 @@ if ($final -cne "RESET") {
 # ── stop container ────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Info "Stopping container '$ProjectName' if running..."
-docker stop $ProjectName 2>$null | Out-Null
-Write-Info "Container stopped (or was not running)."
+try { docker stop $ProjectName 2>&1 | Out-Null } catch { }
+try { docker rm   $ProjectName 2>&1 | Out-Null } catch { }
+Write-Info "Container stopped and removed (or was not running)."
 
 # ── plugins-only mode: clear sentinels via temp container ─────────────────────
 if ($PluginsOnly) {
-    $imgExists = docker image inspect $ImageName 2>$null
+    $imgExists = $null
+    try { $imgExists = docker image inspect $ImageName 2>&1 } catch { }
     if (-not $imgExists) {
         Write-Err "Image '$ImageName' not found. Build it first with: .\run.ps1 -Build"
         exit 1
@@ -179,10 +182,10 @@ if ($PluginsOnly) {
 Write-Info "Deleting $($TargetVols.Count) volume(s)..."
 $failed = 0
 foreach ($v in $TargetVols) {
-    docker volume rm $v 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) {
+    try {
+        docker volume rm $v 2>&1 | Out-Null
         Write-Dim "removed: $v"
-    } else {
+    } catch {
         Write-Err "Failed to remove: $v  (still in use?)"
         $failed++
     }

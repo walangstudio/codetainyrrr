@@ -1,0 +1,127 @@
+{
+  "clis": [
+    {
+      "key": "claude",
+      "name": "Claude Code",
+      "description": "Anthropic's official agentic CLI",
+      "needs_keys": ["ANTHROPIC_API_KEY"],
+      "oauth_supported": true,
+      "bin": "claude",
+      "install": "curl -fsSL https://claude.ai/install.sh | bash"
+    },
+    {
+      "key": "codex",
+      "name": "OpenAI Codex",
+      "description": "OpenAI agent CLI",
+      "needs_keys": ["OPENAI_API_KEY"],
+      "bin": "codex",
+      "install": "npm:@openai/codex"
+    },
+    {
+      "key": "gemini",
+      "name": "Google Gemini",
+      "description": "Google Gemini CLI",
+      "needs_keys": ["GEMINI_API_KEY"],
+      "oauth_supported": true,
+      "bin": "gemini",
+      "install": "npm:@google/gemini-cli"
+    },
+    {
+      "key": "opencode",
+      "name": "OpenCode",
+      "description": "OpenCode AI",
+      "bin": "opencode",
+      "install": "curl -fsSL https://opencode.ai/install | bash"
+    },
+    {
+      "key": "pi",
+      "name": "Pi",
+      "description": "Pi coding agent (Anthropic-powered)",
+      "needs_keys": ["ANTHROPIC_API_KEY"],
+      "bin": "pi",
+      "install": "npm:@mariozechner/pi-coding-agent"
+    },
+    {
+      "key": "goose",
+      "name": "Goose",
+      "description": "Block's AI developer agent",
+      "bin": "goose",
+      "install": "curl -fsSL https://install.goose.rs | bash"
+    },
+    {
+      "key": "aider",
+      "name": "Aider",
+      "description": "AI pair programmer — great for git workflows (Python)",
+      "needs_keys": ["OPENAI_API_KEY"],
+      "bin": "aider",
+      "install": "uv:aider-chat"
+    },
+    {
+      "key": "kilo",
+      "name": "Kilocode",
+      "description": "Kilocode CLI",
+      "bin": "kilo",
+      "install": "npm:@kilocode/cli"
+    },
+    {
+      "key": "cn",
+      "name": "Continue Dev",
+      "description": "Continue Dev CLI",
+      "bin": "cn",
+      "install": "npm:@continuedev/cli"
+    }
+  ],
+  "tools": [
+    { "key": "node",         "category": "Runtimes",   "default": true,  "supported_clis": ["*"], "description": "JS runtime - Node LTS via NVM (recommended)" },
+    { "key": "java",         "category": "Runtimes",   "default": false, "supported_clis": ["*"], "description": "Backend/Android - Java LTS via SDKMan" },
+    { "key": "go",           "category": "Runtimes",   "default": false, "supported_clis": ["*"], "description": "CLI/services - Go latest stable" },
+    { "key": "rust",         "category": "Runtimes",   "default": false, "supported_clis": ["*"], "description": "Systems/WASM - Rust via rustup",
+      "install": "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path" },
+    { "key": "python",       "category": "Runtimes",   "default": false, "supported_clis": ["*"], "description": "ML/scripts - Poetry, black, ruff, mypy" },
+    { "key": "uv",           "category": "Runtimes",   "default": false, "supported_clis": ["*"], "description": "Python package manager & tool runner (Astral)",
+      "install": "curl -LsSf https://astral.sh/uv/install.sh | sh" },
+    { "key": "deno",         "category": "Runtimes",   "default": false, "supported_clis": ["*"], "description": "Secure TS - no node_modules",
+      "install": "curl -fsSL https://deno.land/install.sh | sh" },
+    { "key": "bun",          "category": "Runtimes",   "default": false, "supported_clis": ["*"], "description": "Fast all-in-one - runtime + bundler + pkg mgr",
+      "install": "curl -fsSL https://bun.sh/install | bash" },
+    { "key": "dotnet",       "category": "Runtimes",   "default": false, "supported_clis": ["*"], "description": "C#/F# - .NET SDK LTS",
+      "install": "curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel LTS --install-dir $HOME/.dotnet" },
+    { "key": "cpp",          "category": "Runtimes",   "default": false, "supported_clis": ["*"], "description": "Systems - gcc, clang, cmake, gdb, valgrind" },
+    { "key": "php",          "category": "Runtimes",   "default": false, "supported_clis": ["*"], "description": "Web/scripting - PHP CLI + extensions" },
+    { "key": "ruby",         "category": "Runtimes",   "default": false, "supported_clis": ["*"], "description": "Scripting/Rails - Ruby via apt" },
+    { "key": "ts",           "category": "JS / TS",    "default": true,  "supported_clis": ["*"], "description": "TypeScript + ts-node + tsx",
+      "install": "npm:typescript ts-node tsx" },
+    { "key": "pnpm",         "category": "JS / TS",    "default": false, "supported_clis": ["*"], "description": "Fast pkg mgr - pnpm via corepack" },
+    { "key": "yarn",         "category": "JS / TS",    "default": false, "supported_clis": ["*"], "description": "Alt pkg mgr - Yarn via corepack" },
+    { "key": "react",        "category": "Frameworks", "default": false, "supported_clis": ["*"], "description": "React - Vite + create-react-app",
+      "install": "npm:vite create-react-app" },
+    { "key": "react-native", "category": "Frameworks", "default": false, "supported_clis": ["*"], "description": "React Native CLI - cross-platform mobile" },
+    { "key": "expo",         "category": "Frameworks", "default": false, "supported_clis": ["*"], "description": "Expo - managed React Native workflow" },
+    { "key": "svelte",       "category": "Frameworks", "default": false, "supported_clis": ["*"], "description": "SvelteKit - sv CLI + project scaffolding",
+      "install": "npm:@sveltejs/cli" },
+    { "key": "flutter",      "category": "Frameworks", "default": false, "supported_clis": ["*"], "description": "Flutter - Dart cross-platform mobile + web" },
+    { "key": "rtk",          "category": "Utilities",  "default": true,  "supported_clis": ["*"], "description": "Token saver - optimized ls/grep/git for AI",
+      "install": "curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh && rtk init -g 2>/dev/null || true" },
+    { "key": "lazygit",      "category": "Utilities",  "default": false, "supported_clis": ["*"], "description": "Git TUI - visual branch/diff navigation" }
+  ],
+  "plugins": [
+    { "key": "wire-ccstatusline",      "category": "Claude Code", "default": true,  "supported_clis": ["claude"], "description": "Wire ccstatusline status bar into Claude Code" },
+    { "key": "ccusage",                "category": "Claude Code", "default": false, "supported_clis": ["claude"], "description": "Dashboard for session cost & token usage",
+      "install": "npm:ccusage" },
+    { "key": "caveman",                "category": "Plugins",     "default": false, "supported_clis": ["claude"], "description": "Token saver - caveman-speak output (~70% fewer tokens)",
+      "install": "marketplace:JuliusBrussee/caveman:caveman" },
+    { "key": "context-mode",           "category": "Plugins",     "default": false, "supported_clis": ["claude"], "description": "Sandboxes tool output (~98% context savings)",
+      "install": "marketplace:mksglu/context-mode:context-mode" },
+    { "key": "claude-hud",             "category": "Plugins",     "default": false, "supported_clis": ["claude"], "description": "Live token/context overlay",
+      "install": "marketplace:jarrodwatts/claude-hud:claude-hud" },
+    { "key": "claude-mem",             "category": "Plugins",     "default": false, "supported_clis": ["claude"], "description": "Auto-captures session activity for continuity",
+      "install": "marketplace:thedotmack/claude-mem:claude-mem" },
+    { "key": "mempalace",              "category": "Plugins",     "default": false, "supported_clis": ["*"],      "description": "Spatial AI memory indexed locally",
+      "install": "uv:mempalace" },
+    { "key": "graphify",               "category": "Plugins",     "default": false, "supported_clis": ["*"],      "description": "Codebase knowledge graph" },
+    { "key": "karpathy-skills",        "category": "Plugins",     "default": false, "supported_clis": ["claude"], "description": "Karpathy's 4 principles: think first, minimal code",
+      "install": "marketplace:forrestchang/andrej-karpathy-skills:andrej-karpathy-skills:karpathy-skills" },
+    { "key": "everything-claude-code", "category": "Plugins",     "default": false, "supported_clis": ["claude"], "description": "48 agents + 183 skills (large)",
+      "install": "marketplace:affaan-m/everything-claude-code:everything-claude-code" }
+  ]
+}

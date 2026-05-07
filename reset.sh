@@ -35,7 +35,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ── auto-detect project names from volumes ───────────────────────────────────
-mapfile -t DETECTED_NAMES < <(docker volume ls -q 2>/dev/null | grep "_ct_home$" | sed 's/_ct_home$//' | sort -u)
+mapfile -t DETECTED_NAMES < <(docker volume ls -q 2>/dev/null | grep "_ct_home" | grep -v "_test_ct_home" | sed 's/_ct_home.*$//' | sort -u)
 
 if [ ${#DETECTED_NAMES[@]} -eq 0 ]; then
     echo "No codetainyrrr volumes found. Nothing to reset."
@@ -76,7 +76,7 @@ if [ "$PLUGINS_ONLY" = true ]; then
     RESET_LABEL="plugins only"
     RESET_DETAIL="plugin sentinels cleared — tools and Claude data untouched"
 else
-    mapfile -t TARGET_VOLS < <(docker volume ls -q | grep "^${PROJECT_NAME}_ct_home$" || true)
+    mapfile -t TARGET_VOLS < <(docker volume ls -q | grep "^${PROJECT_NAME}_ct_home" | grep -v "^${PROJECT_NAME}_test_ct_home" || true)
     RESET_LABEL="full"
     RESET_DETAIL="home volume deleted — all tools, plugins, and data will be re-downloaded"
 fi
@@ -159,7 +159,9 @@ fi
 # ── stop container ────────────────────────────────────────────────────────────
 echo
 info "Stopping container '${PROJECT_NAME}' if running..."
-docker stop "$PROJECT_NAME" 2>/dev/null && info "Container stopped." || true
+docker stop "$PROJECT_NAME" 2>/dev/null || true
+docker rm   "$PROJECT_NAME" 2>/dev/null || true
+info "Container stopped and removed (or was not running)."
 
 # ── plugins-only mode: clear sentinels via temp container ────────────────────
 if [ "$PLUGINS_ONLY" = true ]; then

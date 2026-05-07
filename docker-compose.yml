@@ -60,6 +60,7 @@ services:
 
       # CLI: claude | codex | gemini | opencode | pi | goose | aider | kilo | cn
       - CODING_CLI=${CODING_CLI:-claude}
+      - WIRE_CCSTATUSLINE=${WIRE_CCSTATUSLINE:-true}
 
       # Dev tools installed at container start (home-dir installable):
       # java, go, rust, ts, react, svelte, python, deno, bun, dotnet,lazygit

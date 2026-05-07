@@ -8,6 +8,8 @@
 #   ./test.sh --cleanup           # remove test volumes after run
 #   ./test.sh --skip-build        # skip docker build, use existing image
 #   ./test.sh --parallel          # run all CLIs in parallel
+#   ./test.sh --wizard            # run setup wizard navigation tests (no Docker required)
+#   ./test.sh --wizard --skip-build  # wizard tests only
 
 set -euo pipefail
 
@@ -154,6 +156,7 @@ FAST=false
 CLEANUP=false
 SKIP_BUILD=false
 PARALLEL=false
+WIZARD=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -162,11 +165,13 @@ while [[ $# -gt 0 ]]; do
         --cleanup)    CLEANUP=true; shift ;;
         --skip-build) SKIP_BUILD=true; shift ;;
         --parallel)   PARALLEL=true; shift ;;
+        --wizard)     WIZARD=true; shift ;;
         *) shift ;;
     esac
 done
 
-ALL_CLIS=(claude codex gemini opencode pi goose aider kilo cn)
+mapfile -t ALL_CLIS < <(jq -r '.clis // [] | .[].key' "$SCRIPT_DIR/catalog.json" 2>/dev/null \
+    || echo -e "claude\ncodex\ngemini\nopencode\npi\ngoose\naider\nkilo\ncn")
 [ -n "$ONLY_CLI" ] && ALL_CLIS=("$ONLY_CLI")
 [ "$FAST" = true ]  && ALL_CLIS=(zsh)
 
@@ -215,6 +220,34 @@ fi
 
 echo
 _test_subcommands
+
+# ---------------------------------------------------------------------------
+# Wizard tests (no Docker required)
+# ---------------------------------------------------------------------------
+if [ "$WIZARD" = true ] || [ "$SKIP_BUILD" = true ]; then
+    echo
+    echo "[test] Running wizard navigation tests..."
+    if bash "$SCRIPT_DIR/test-setup.sh"; then
+        echo "[test] Wizard tests PASSED."
+    else
+        echo "[test] Wizard tests FAILED."
+        FAILURES+=("wizard-sh")
+    fi
+
+    _psexe=""
+    command -v pwsh        &>/dev/null && _psexe="pwsh"
+    command -v powershell  &>/dev/null && [ -z "$_psexe" ] && _psexe="powershell"
+    if [ -n "$_psexe" ]; then
+        if "$_psexe" -File "$SCRIPT_DIR/test-setup.ps1"; then
+            echo "[test] Wizard PS1 tests PASSED."
+        else
+            echo "[test] Wizard PS1 tests FAILED."
+            FAILURES+=("wizard-ps1")
+        fi
+    else
+        echo "[test] pwsh/powershell not found — skipping test-setup.ps1"
+    fi
+fi
 
 # ---------------------------------------------------------------------------
 # Summary

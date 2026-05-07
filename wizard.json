@@ -1,0 +1,80 @@
+{
+  "pages": [
+    {
+      "id": "cli",
+      "title": "AI Coding Assistant",
+      "description": "Which CLI should run inside the container?",
+      "fields": [
+        { "id": "CODING_CLI",      "type": "single_select", "source": "catalog.clis", "default": "claude" },
+        { "id": "CONTAINER_NAME",  "type": "text",          "prompt": "Container name (shown in docker ps):", "default": "codetainyrrr" }
+      ]
+    },
+    {
+      "id": "paths",
+      "title": "Project Directory",
+      "description": "The folder on your host machine mounted as /workspace inside the container.",
+      "hint": "Both Windows (C:\\path) and Unix (/path or C:/path) formats accepted.",
+      "fields": [
+        { "id": "PROJECT_DIR",        "type": "path",      "prompt": "Path to your project (absolute path):",    "default": "" },
+        { "id": "EXTRA_WORKSPACES",   "type": "path_list", "prompt": "Extra paths (semicolon-separated):",       "default": "", "condition_field": "_extra_ws" }
+      ]
+    },
+    {
+      "id": "claude_settings",
+      "title": "Claude Settings",
+      "description": "Share project memories with Claude Desktop?",
+      "hint": "Yes — projects/ and todos/ sync with your host Claude Desktop. No — fully isolated.",
+      "fields": [
+        { "id": "CLAUDE_DIR",   "type": "path", "prompt": "Path to your Claude config dir:", "default": "" },
+        { "id": "CLAUDE_JSON",  "type": "path", "prompt": "Path to your claude.json file:",  "default": "" }
+      ]
+    },
+    {
+      "id": "api_keys",
+      "title": "API Keys",
+      "description": "Keys are stored only in your local .env — never sent anywhere.",
+      "fields": [
+        { "id": "ANTHROPIC_API_KEY",   "type": "secret", "prompt": "Anthropic API key (or leave blank):",   "hint": "Leave blank if you log in via claude.ai" },
+        { "id": "OPENAI_API_KEY",      "type": "secret", "prompt": "OpenAI API key (or leave blank):",      "default": "" },
+        { "id": "OPENROUTER_API_KEY",  "type": "secret", "prompt": "OpenRouter API key (or leave blank):",  "default": "" },
+        { "id": "GEMINI_API_KEY",      "type": "secret", "prompt": "Gemini API key (or leave blank):",      "default": "" }
+      ]
+    },
+    {
+      "id": "git_identity",
+      "title": "Git Identity",
+      "description": "Used for commits made inside the container.",
+      "fields": [
+        { "id": "GIT_AUTHOR_NAME",   "type": "text", "prompt": "Your name:",  "default": "" },
+        { "id": "GIT_AUTHOR_EMAIL",  "type": "text", "prompt": "Your email:", "default": "" }
+      ]
+    },
+    {
+      "id": "tools",
+      "title": "Dev Tools  (optional)",
+      "description": "Lazy-installed on first run into named volumes — instant on every start after.",
+      "fields": [
+        { "id": "INSTALL_TOOLS", "type": "multiselect", "source": "catalog.tools" }
+      ]
+    },
+    {
+      "id": "plugins",
+      "title": "Plugins  (optional)",
+      "description": "Installed once, sentineled. Add/remove later: ./run.sh plugins add/remove <name>",
+      "fields": [
+        { "id": "INSTALL_PLUGINS", "type": "multiselect", "source": "catalog.plugins" }
+      ]
+    },
+    {
+      "id": "custom_configs",
+      "title": "Custom Configs  (optional)",
+      "description": "Point to files on your host — mounted read-only into the container.",
+      "hint": "Leave blank to use built-in defaults.",
+      "fields": [
+        { "id": "CCSTATUSLINE_CONFIG", "type": "path", "prompt": "ccstatusline settings.json path (blank = use built-in):", "default": "" },
+        { "id": "ZSH_EXTRA_CONFIG",    "type": "path", "prompt": "Extra zsh config to source at shell start (blank = none):", "default": "" },
+        { "id": "STARSHIP_CONFIG",     "type": "path", "prompt": "starship.toml path (blank = use built-in):", "default": "" }
+      ]
+    }
+  ]
+}

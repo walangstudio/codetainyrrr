@@ -64,6 +64,9 @@ BYO_CONFIG_FLAGS=()
 [ -n "$ZSH_EXTRA_CONFIG" ]    && BYO_CONFIG_FLAGS+=("--volume" "${ZSH_EXTRA_CONFIG}:/home/dev/.config/zsh/extra.zsh:ro,z")
 [ -n "$STARSHIP_CONFIG" ]     && BYO_CONFIG_FLAGS+=("--volume" "${STARSHIP_CONFIG}:/home/dev/.config/starship.toml:ro,z")
 
+USER_CATALOG_FLAGS=()
+[ -f "$SCRIPT_DIR/catalog.user.json" ] && USER_CATALOG_FLAGS+=("--volume" "$SCRIPT_DIR/catalog.user.json:/catalog.user.json:ro,z")
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -119,7 +122,7 @@ case "${1:-}" in
             echo "[run.sh] Container '$CONTAINER_NAME' is not running. Start it with: ./run.sh"
             exit 1
         fi
-        exec docker exec -it "$CONTAINER_NAME" /bin/zsh -l
+        exec docker exec -it --user dev "$CONTAINER_NAME" /bin/zsh -l
         ;;
     restart)
         docker stop "$CONTAINER_NAME" 2>/dev/null || true
@@ -289,7 +292,7 @@ _docker_build() {
 
 # Rebuild image if requested
 if [ "$DO_BUILD" = true ]; then
-    echo "[run.sh] Building codetainyrrr image (UID=${HOST_UID} GID=${HOST_GID} CPP=${INSTALL_CPP} PHP=${INSTALL_PHP} RUBY=${INSTALL_RUBY})..."
+    echo "[run.sh] Building codetainyrrr image (UID=${HOST_UID} GID=${HOST_GID})..."
     _docker_build
 fi
 
@@ -305,14 +308,16 @@ if ! docker network inspect "$NETWORK_NAME" &>/dev/null; then
 fi
 
 # .claude volume strategy:
-#   CLAUDE_DIR set   → bind-mount overlays on top of home volume (share with Claude Desktop)
-#   CLAUDE_DIR blank → home volume handles ~/.claude (no extra mount needed)
+# Named volume (ct_home) always owns ~/.claude — settings.json, hooks, CLAUDE.md stay container-local.
+# When CLAUDE_DIR is set, only projects/ and todos/ are bind-mounted (memory sync with Claude Desktop).
+# This prevents the host's hooks and permissions from leaking into the container.
 CLAUDE_VOLUME_FLAGS=()
 if [ -n "$CLAUDE_DIR" ]; then
     touch "$CLAUDE_JSON" 2>/dev/null || true
-    mkdir -p "$CLAUDE_DIR" 2>/dev/null || true
+    mkdir -p "$CLAUDE_DIR/projects" "$CLAUDE_DIR/todos" 2>/dev/null || true
     CLAUDE_VOLUME_FLAGS=(
-        "--volume" "${CLAUDE_DIR}:/home/dev/.claude:z"
+        "--volume" "${CLAUDE_DIR}/projects:/home/dev/.claude/projects:z"
+        "--volume" "${CLAUDE_DIR}/todos:/home/dev/.claude/todos:z"
         "--volume" "${CLAUDE_JSON}:/home/dev/.claude.json:z"
     )
 fi
@@ -357,21 +362,15 @@ if [ "$DETACH" = true ]; then
     _ct_status=$(docker container inspect "$CONTAINER_NAME" --format '{{.State.Status}}' 2>/dev/null || echo "")
     if [ "$_ct_status" = "running" ]; then
         if [ "$AUTO_CONNECT" = true ]; then
-            exec docker exec -it "$CONTAINER_NAME" /bin/zsh -l
+            exec docker exec -it --user dev "$CONTAINER_NAME" /bin/zsh -l
         else
             echo "[run.sh] Container already running. Connect with: ./run.sh connect"
             exit 0
         fi
     elif [ -n "$_ct_status" ]; then
-        # Exists but stopped — restart rather than recreate
-        echo "[run.sh] Restarting stopped container..."
-        docker start "$CONTAINER_NAME"
-        if [ "$AUTO_CONNECT" = true ]; then
-            exec docker exec -it "$CONTAINER_NAME" /bin/zsh -l
-        else
-            echo "[run.sh] Container restarted. Connect with: ./run.sh connect"
-            exit 0
-        fi
+        # Stopped — remove and recreate so any .env changes (PROJECT_DIR, etc.) take effect.
+        # The ct_home named volume persists all tools and data; only the container shell is recreated.
+        docker rm "$CONTAINER_NAME" >/dev/null 2>&1 || true
     fi
     [ "$AUTO_CONNECT" = false ] && echo "[run.sh] Starting daemon. Connect with: ./run.sh connect"
 else
@@ -393,6 +392,7 @@ DOCKER_RUN_ARGS=(
     ${CLAUDE_VOLUME_FLAGS[@]+"${CLAUDE_VOLUME_FLAGS[@]}"}
     ${EXTRA_WORKSPACE_FLAGS[@]+"${EXTRA_WORKSPACE_FLAGS[@]}"}
     ${BYO_CONFIG_FLAGS[@]+"${BYO_CONFIG_FLAGS[@]}"}
+    ${USER_CATALOG_FLAGS[@]+"${USER_CATALOG_FLAGS[@]}"}
     --env "HOST_UID=${HOST_UID}"
     --env "HOST_GID=${HOST_GID}"
     --env "CODING_CLI=${CODING_CLI}"
@@ -413,14 +413,29 @@ DOCKER_RUN_ARGS=(
     --env "NO_PROXY=${NO_PROXY:-}"
     --network "$NETWORK_NAME"
     ${EXTRA_NETWORK_FLAGS[@]+"${EXTRA_NETWORK_FLAGS[@]}"}
-    --workdir "/workspace/${PROJECT_DIRNAME}"
+    --workdir "/workspace"
     "$IMAGE_NAME"
     ${CONTAINER_ARGS[@]+"${CONTAINER_ARGS[@]}"}
 )
 
+_wait_for_ready() {
+    local sentinel="/home/dev/.local/share/codetainyrrr/ready"
+    local i=0
+    printf "[run.sh] Waiting for setup to complete"
+    until docker exec "$CONTAINER_NAME" test -f "$sentinel" 2>/dev/null; do
+        sleep 2
+        printf "."
+        i=$((i + 1))
+        # Give up after 10 minutes — user can connect manually
+        [ $i -ge 300 ] && { echo " timed out. Connect manually with: ./run.sh connect"; return 1; }
+    done
+    echo " done."
+}
+
 if [ "$AUTO_CONNECT" = true ]; then
     docker run "${DOCKER_RUN_ARGS[@]}"
-    exec docker exec -it "$CONTAINER_NAME" /bin/zsh -l
+    _wait_for_ready
+    exec docker exec -it --user dev "$CONTAINER_NAME" /bin/zsh -l
 else
     exec docker run "${DOCKER_RUN_ARGS[@]}"
 fi
