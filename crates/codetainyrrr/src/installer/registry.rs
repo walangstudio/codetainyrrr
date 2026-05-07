@@ -1,16 +1,35 @@
 /// Dispatch an install spec string to the correct handler.
 ///
-/// Spec formats (mirrors entrypoint.sh _install_from_spec):
-///   npm:<packages>                   → NpmHandler
-///   uv:<package>                     → UvHandler
+/// Spec formats:
+///   npm:<packages>                      → NpmHandler
+///   uv:<package>                        → UvHandler
+///   nvm:<version>                       → NvmHandler
+///   go:latest                           → GoHandler
+///   sdkman:<package>                    → SdkmanHandler
+///   corepack:<package>                  → CorepackHandler
+///   gh:<owner/repo>:<asset_pattern>     → GithubReleaseHandler
+///   git:<url>:<install_to>              → GitCloneHandler
+///   apt:<packages>                      → AptHandler
+///   python:tools                        → PythonHandler
+///   wire-ccstatusline:<cmd>             → WireCcstatuslineHandler
 ///   marketplace:<repo>:<plugin>[:<mkt>] → MarketplaceHandler
-///   curl -fsSL <url> | bash          → ShellPipeHandler (raw shell)
-///   <anything else>                  → ShellHandler
+///   curl -fsSL <url> | bash             → ShellPipeHandler
 use anyhow::{bail, Result};
 
 use super::handlers::{
-    marketplace::MarketplaceHandler, npm::NpmHandler, shell::ShellPipeHandler,
+    apt::AptHandler,
+    corepack::CorepackHandler,
+    git_clone::GitCloneHandler,
+    github_release::GithubReleaseHandler,
+    go_lang::GoHandler,
+    marketplace::MarketplaceHandler,
+    npm::NpmHandler,
+    nvm::NvmHandler,
+    python::PythonHandler,
+    sdkman::SdkmanHandler,
+    shell::ShellPipeHandler,
     uv::UvHandler,
+    wire_ccstatusline::WireCcstatuslineHandler,
 };
 use super::{InstallStatus, Installer};
 use crate::installer::sentinel;
@@ -58,15 +77,18 @@ pub async fn status(kind: Kind, key: &str) -> Result<InstallStatus> {
 }
 
 fn handler_for(spec: &str) -> Result<Box<dyn Installer>> {
-    if spec.starts_with("npm:") {
-        return Ok(Box::new(NpmHandler));
-    }
-    if spec.starts_with("uv:") {
-        return Ok(Box::new(UvHandler));
-    }
-    if spec.starts_with("marketplace:") {
-        return Ok(Box::new(MarketplaceHandler));
-    }
+    if spec.starts_with("npm:")               { return Ok(Box::new(NpmHandler)); }
+    if spec.starts_with("uv:")                { return Ok(Box::new(UvHandler)); }
+    if spec.starts_with("nvm:")               { return Ok(Box::new(NvmHandler)); }
+    if spec.starts_with("go:")                { return Ok(Box::new(GoHandler)); }
+    if spec.starts_with("sdkman:")            { return Ok(Box::new(SdkmanHandler)); }
+    if spec.starts_with("corepack:")          { return Ok(Box::new(CorepackHandler)); }
+    if spec.starts_with("gh:")                { return Ok(Box::new(GithubReleaseHandler)); }
+    if spec.starts_with("git:")               { return Ok(Box::new(GitCloneHandler)); }
+    if spec.starts_with("apt:")               { return Ok(Box::new(AptHandler)); }
+    if spec.starts_with("python:")            { return Ok(Box::new(PythonHandler)); }
+    if spec.starts_with("wire-ccstatusline:") { return Ok(Box::new(WireCcstatuslineHandler)); }
+    if spec.starts_with("marketplace:")       { return Ok(Box::new(MarketplaceHandler)); }
     if spec.contains("| bash") || spec.contains("| sh") || spec.starts_with("curl") {
         return Ok(Box::new(ShellPipeHandler));
     }
