@@ -5,7 +5,7 @@ use crate::config::loader;
 use crate::installer::{registry::{self, Kind}, InstallStatus};
 
 pub async fn run() -> Result<()> {
-    let root = std::env::current_dir()?;
+    let root = crate::config::locate_root();
     let cfg = loader::load(&root)?;
 
     header("AI CLIs");
