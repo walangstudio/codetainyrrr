@@ -38,10 +38,8 @@ if (Test-Path $EnvFile) {
             $parts = $line -split '=', 2
             if ($parts.Count -eq 2) {
                 $key = $parts[0].Trim()
-                $val = $parts[1].Trim()
-                if (-not [Environment]::GetEnvironmentVariable($key)) {
-                    [Environment]::SetEnvironmentVariable($key, $val)
-                }
+                $val = $parts[1].Trim().Trim('"').Trim("'").Trim()
+                [Environment]::SetEnvironmentVariable($key, $val)
             }
         }
     }
@@ -66,6 +64,7 @@ function Test-ValidId($s) { $s -match '^[a-zA-Z0-9_/:.\-]+$' }
 # ---------------------------------------------------------------------------
 # Subcommands
 # ---------------------------------------------------------------------------
+$ContainerArgs = @($ContainerArgs)  # PS5.1: single arg comes in as string, not string[]
 $sub = if ($ContainerArgs.Count -gt 0) { $ContainerArgs[0] } else { "" }
 
 if ($sub -in @("help", "--help", "-h")) {
@@ -103,7 +102,7 @@ if ($sub -eq "connect") {
         Write-Host "[run.ps1] Container '$ContainerName' is not running. Start it with: .\run.ps1"
         exit 1
     }
-    & docker exec -it $ContainerName /bin/zsh -l
+    & docker exec -it --user dev $ContainerName /bin/zsh -l
     exit $LASTEXITCODE
 }
 if ($sub -eq "restart") {
@@ -151,7 +150,7 @@ if ($ContainerArgs.Count -gt 0 -and $ContainerArgs[0] -eq "switch") {
         & "$PSCommandPath"
         exit $LASTEXITCODE
     } else {
-        Write-Host "[run.ps1] Container not running — new CLI takes effect on next start."
+        Write-Host "[run.ps1] Container not running - new CLI takes effect on next start."
         exit 0
     }
 }
@@ -185,7 +184,7 @@ if ($ContainerArgs.Count -gt 0 -and $ContainerArgs[0] -eq "plugins") {
                 $cli = if ($env:CODING_CLI) { $env:CODING_CLI } else { 'claude' }
                 docker exec -e "INSTALL_PLUGINS=$Arg" -e "CODING_CLI=$cli" $ContainerName /entrypoint.sh --plugins
             } else {
-                Write-Host "[run.ps1] Container not running — plugins install on next start."
+                Write-Host "[run.ps1] Container not running - plugins install on next start."
             }
         }
         "remove" {
@@ -204,7 +203,7 @@ if ($ContainerArgs.Count -gt 0 -and $ContainerArgs[0] -eq "plugins") {
                 docker exec $ContainerName rm -f $Sentinel 2>$null | Out-Null
                 Write-Host "[run.ps1] Sentinel removed."
             } else {
-                Write-Host "[run.ps1] Container not running — sentinel will be absent on next start."
+                Write-Host "[run.ps1] Container not running - sentinel will be absent on next start."
             }
         }
         default {
@@ -227,20 +226,25 @@ $CodingCLI = if ($Cli)          { $Cli } elseif ($env:CODING_CLI) { $env:CODING_
 
 $UserProfile = $env:USERPROFILE -replace '\\', '/'
 
+function ConvertTo-DockerPath($p) {
+    # /f/opt/... (Git Bash / MSYS2) → F:/opt/... (Windows + Docker-compatible)
+    if ($p -match '^/([a-zA-Z])/(.*)') { return "$($Matches[1].ToUpper()):/$($Matches[2])" }
+    return $p -replace '\\', '/'
+}
 $ProjectDir = if ($env:PROJECT_DIR -and $env:PROJECT_DIR -ne "") {
-    $env:PROJECT_DIR -replace '\\', '/'
+    ConvertTo-DockerPath $env:PROJECT_DIR
 } else {
     "$ScriptDir/workspace" -replace '\\', '/'
 }
 
 $ClaudeDir = if ($env:CLAUDE_DIR -and $env:CLAUDE_DIR -ne "") {
-    $env:CLAUDE_DIR -replace '\\', '/'
+    ConvertTo-DockerPath $env:CLAUDE_DIR
 } else {
     "$UserProfile/.claude"
 }
 
 $ClaudeJson = if ($env:CLAUDE_JSON -and $env:CLAUDE_JSON -ne "") {
-    $env:CLAUDE_JSON -replace '\\', '/'
+    ConvertTo-DockerPath $env:CLAUDE_JSON
 } else {
     "$UserProfile/.claude.json"
 }
@@ -269,6 +273,12 @@ if ($CcstatuslineConfig) { $ByoConfigArgs += "--volume"; $ByoConfigArgs += "${Cc
 if ($ZshExtraConfig)     { $ByoConfigArgs += "--volume"; $ByoConfigArgs += "${ZshExtraConfig}:/home/dev/.config/zsh/extra.zsh:ro" }
 if ($StarshipConfig)     { $ByoConfigArgs += "--volume"; $ByoConfigArgs += "${StarshipConfig}:/home/dev/.config/starship.toml:ro" }
 
+$UserCatalogArgs = @()
+$UserCatalogPath = Join-Path $ScriptDir "catalog.user.json"
+if (Test-Path $UserCatalogPath) {
+    $UserCatalogArgs = @("--volume", "$($UserCatalogPath -replace '\\', '/'):/catalog.user.json:ro")
+}
+
 # Derive system-level build args from INSTALL_TOOLS
 $InstallCpp  = if ($InstallTools -match "(^|,)cpp(,|$)")  { "true" } else { "false" }
 $InstallPhp  = if ($InstallTools -match "(^|,)php(,|$)")  { "true" } else { "false" }
@@ -279,7 +289,7 @@ $InstallRuby = if ($InstallTools -match "(^|,)ruby(,|$)") { "true" } else { "fal
 # ---------------------------------------------------------------------------
 $imageExists = docker image inspect $ImageName 2>$null
 if ($Build -or -not $imageExists) {
-    Write-Host "[run.ps1] Building codetainyrrr image (UID=$HostUID GID=$HostGID CPP=$InstallCpp PHP=$InstallPhp RUBY=$InstallRuby)..."
+    Write-Host "[run.ps1] Building codetainyrrr image (UID=$HostUID GID=$HostGID)..."
     docker build `
         --build-arg "HOST_UID=$HostUID" `
         --build-arg "HOST_GID=$HostGID" `
@@ -303,27 +313,31 @@ if (-not (Test-Path $ProjectDir)) {
     New-Item -ItemType Directory -Path $ProjectDir -Force | Out-Null
 }
 
-# .claude volume strategy: home volume handles ~/.claude by default.
-# When CLAUDE_DIR is set, bind-mount overlays on top (shares with Claude Desktop).
+# .claude volume strategy:
+# Named volume (ct_home) always owns ~/.claude — settings.json, hooks, CLAUDE.md stay container-local.
+# When CLAUDE_DIR is set, only projects/ and todos/ are bind-mounted (memory sync with Claude Desktop).
+# This prevents the host's Windows hooks and permissions from leaking into the container.
 $ClaudeVolumeArgs = @()
-$ClaudeDirRaw = $env:CLAUDE_DIR
-if ($ClaudeDirRaw -and $ClaudeDirRaw -ne "") {
-    $ClaudeDir = $ClaudeDirRaw -replace '\\', '/'
+if ($env:CLAUDE_DIR -and $env:CLAUDE_DIR -ne "") {
     $ClaudeJson = if ($env:CLAUDE_JSON -and $env:CLAUDE_JSON -ne "") {
-        $env:CLAUDE_JSON -replace '\\', '/'
+        ConvertTo-DockerPath $env:CLAUDE_JSON
     } else {
         "$UserProfile/.claude.json"
     }
+    foreach ($sub in @("projects", "todos")) {
+        $p = "$ClaudeDir/$sub"
+        if (-not (Test-Path $p)) { New-Item -ItemType Directory -Path $p -Force | Out-Null }
+    }
     if (-not (Test-Path $ClaudeJson)) { New-Item -ItemType File -Path $ClaudeJson -Force | Out-Null }
-    if (-not (Test-Path $ClaudeDir))  { New-Item -ItemType Directory -Path $ClaudeDir -Force | Out-Null }
     $ClaudeVolumeArgs = @(
-        "--volume", "${ClaudeDir}:/home/dev/.claude",
+        "--volume", "${ClaudeDir}/projects:/home/dev/.claude/projects",
+        "--volume", "${ClaudeDir}/todos:/home/dev/.claude/todos",
         "--volume", "${ClaudeJson}:/home/dev/.claude.json"
     )
 }
 
 $ProjectDirName = Split-Path -Leaf $ProjectDir
-Write-Host "[run.ps1] CLI: $CodingCLI | Project: $ProjectDir → /workspace/$ProjectDirName"
+Write-Host "[run.ps1] CLI: $CodingCLI | Project: $ProjectDir -> /workspace/$ProjectDirName"
 
 # ---------------------------------------------------------------------------
 # Build docker run args
@@ -344,26 +358,23 @@ if ($Detach) {
 
 # Idempotent: check existing container state before trying to docker run
 if ($Detach) {
-    $CtStatus = docker container inspect $ContainerName --format '{{.State.Status}}' 2>$null
+    $CtStatus = $null
+    try {
+        $_ctOut = docker container inspect $ContainerName --format '{{.State.Status}}'
+        if ($LASTEXITCODE -eq 0) { $CtStatus = "$_ctOut".Trim() }
+    } catch { }
     if ($CtStatus -eq "running") {
         if ($AutoConnect) {
-            & docker exec -it $ContainerName /bin/zsh -l
+            & docker exec -it --user dev $ContainerName /bin/zsh -l
             exit $LASTEXITCODE
         } else {
             Write-Host "[run.ps1] Container already running. Connect with: .\run.ps1 connect"
             exit 0
         }
     } elseif ($CtStatus) {
-        # Exists but stopped — restart rather than recreate
-        Write-Host "[run.ps1] Restarting stopped container..."
-        docker start $ContainerName | Out-Null
-        if ($AutoConnect) {
-            & docker exec -it $ContainerName /bin/zsh -l
-            exit $LASTEXITCODE
-        } else {
-            Write-Host "[run.ps1] Container restarted. Connect with: .\run.ps1 connect"
-            exit 0
-        }
+        # Stopped — remove and recreate so any .env changes (PROJECT_DIR, etc.) take effect.
+        # The ct_home named volume persists all tools and data; only the container shell is recreated.
+        try { docker rm $ContainerName 2>&1 | Out-Null } catch { }
     }
 }
 
@@ -376,7 +387,7 @@ $RunArgs = $RunModeArgs + @(
     "--cap-add", "SETGID",
     "--security-opt", "no-new-privileges:true",
     "--volume", "${ProjectDir}:/workspace/${ProjectDirName}",
-    "--volume", "${ContainerName}_ct_home:/home/dev") + $ClaudeVolumeArgs + $ByoConfigArgs + @(
+    "--volume", "${ContainerName}_ct_home:/home/dev") + $ClaudeVolumeArgs + $ByoConfigArgs + $UserCatalogArgs + @(
     "--env", "HOST_UID=$HostUID",
     "--env", "HOST_GID=$HostGID",
     "--env", "CODING_CLI=$CodingCLI",
@@ -413,12 +424,12 @@ if ($ExtraWorkspaces -ne "") {
         }
         $RunArgs += "--volume"
         $RunArgs += "${ws}:/workspace/${wsName}"
-        Write-Host "[run.ps1] Extra workspace: $ws → /workspace/$wsName"
+        Write-Host "[run.ps1] Extra workspace: $ws -> /workspace/$wsName"
     }
 }
 
 $RunArgs += "--workdir"
-$RunArgs += "/workspace/$ProjectDirName"
+$RunArgs += "/workspace"
 $RunArgs += $ImageName
 
 foreach ($arg in $ContainerArgs) {
@@ -428,9 +439,28 @@ foreach ($arg in $ContainerArgs) {
 # ---------------------------------------------------------------------------
 # Launch
 # ---------------------------------------------------------------------------
+function Wait-ForReady($name) {
+    $sentinel = "/home/dev/.local/share/codetainyrrr/ready"
+    $i = 0
+    Write-Host -NoNewline "[run.ps1] Waiting for setup to complete"
+    while ($true) {
+        docker exec $name test -f $sentinel 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) { break }
+        Start-Sleep 2
+        Write-Host -NoNewline "."
+        $i++
+        if ($i -ge 300) {
+            Write-Host " timed out. Connect manually with: .\run.ps1 connect"
+            return
+        }
+    }
+    Write-Host " done."
+}
+
 if ($AutoConnect) {
     & docker @RunArgs
-    & docker exec -it $ContainerName /bin/zsh -l
+    Wait-ForReady $ContainerName
+    & docker exec -it --user dev $ContainerName /bin/zsh -l
 } else {
     & docker @RunArgs
 }

@@ -3,7 +3,7 @@
 # then dispatches. Named volumes persist everything so subsequent starts are instant.
 #
 # CODING_CLI: claude | codex | gemini | opencode | pi | goose | aider | kilo | cn
-# INSTALL_TOOLS: comma-separated — java,go,rust,ts,react,svelte,python,deno,bun,dotnet,lazygit
+# INSTALL_TOOLS: comma-separated — rtk,java,go,rust,node,pnpm,yarn,ts,react,svelte,python,deno,bun,dotnet,lazygit
 #                cpp, php, ruby are baked into the image at build time (see Dockerfile)
 # INSTALL_PLUGINS: comma-separated — built-in names or custom entries:
 #   Built-in:  caveman,context-mode,claude-mem,claude-hud,ccusage,graphify,
@@ -23,6 +23,9 @@ if [ "$(id -u)" = "0" ]; then
     # Batch-chown only files/dirs that are wrong — no-op on subsequent starts.
     find /home/dev \( -not -user "$_uid" -o -not -group "$_gid" \) \
         -exec chown "${_uid}:${_gid}" {} + 2>/dev/null || true
+    # Ensure common dirs exist with correct ownership so tools never hit EPERM on first write.
+    mkdir -p /home/dev/.cache /home/dev/.config /home/dev/.local/bin
+    chown "${_uid}:${_gid}" /home/dev/.cache /home/dev/.config /home/dev/.local/bin
     export HOME=/home/dev
     exec gosu "${_uid}:${_gid}" "$0" "$@"
 fi
@@ -63,6 +66,8 @@ _ensure_uv() {
     export PATH="$HOME/.local/bin:$PATH"
 }
 
+_install_rtk() { _ensure_rtk; }
+
 _ensure_rtk() {
     if [ ! -f "$HOME/.local/bin/rtk" ]; then
         _log "Installing RTK..."
@@ -80,7 +85,10 @@ _install_java() {
     fi
     if [ -s "$SDKMAN_DIR/bin/sdkman-init.sh" ]; then
         source "$SDKMAN_DIR/bin/sdkman-init.sh"
-        sdk list java 2>/dev/null | grep -q ' installed' || { _log "Installing Java LTS..."; sdk install java; }
+        sdk list java 2>/dev/null | grep -q ' installed' || {
+            _log "Installing Java LTS..."
+            SDKMAN_AUTO_ANSWER=true sdk install java || _log "[WARN] Java install failed — run 'sdk install java' inside the container"
+        }
     else
         _log "SDKMan install failed — skipping Java. Run install-sdkman inside the container."
     fi
@@ -89,13 +97,19 @@ _install_java() {
 _install_go() {
     if [ ! -f "$HOME/go/sdk/go/bin/go" ]; then
         _log "Installing Go..."
-        GO_VERSION=$(curl -fsSL "https://go.dev/VERSION?m=text" | head -1)
+        local GO_VERSION
+        GO_VERSION=$(curl -fsSL "https://go.dev/VERSION?m=text" 2>/dev/null | head -1)
+        if [ -z "$GO_VERSION" ]; then
+            _log "[WARN] Could not fetch Go version from go.dev — check network and restart container to retry"
+            return 1
+        fi
         mkdir -p "$HOME/go/sdk"
-        curl -fsSL "https://go.dev/dl/${GO_VERSION}.linux-amd64.tar.gz" \
-            | tar -xz -C "$HOME/go/sdk/"
-        mv "$HOME/go/sdk/go" "$HOME/go/sdk/go-bin"
-        # rename so we can detect it next time
-        mv "$HOME/go/sdk/go-bin" "$HOME/go/sdk/go"
+        if ! curl -fsSL "https://go.dev/dl/${GO_VERSION}.linux-amd64.tar.gz" \
+                | tar -xz -C "$HOME/go/sdk/"; then
+            rm -rf "$HOME/go/sdk/go"
+            _log "[WARN] Go download/extraction failed — restart container to retry"
+            return 1
+        fi
         _log "Go ${GO_VERSION} ready."
     fi
     export GOROOT="$HOME/go/sdk/go"
@@ -132,11 +146,13 @@ _install_react() {
 
 _install_svelte() {
     _ensure_nvm
-    if ! npm list -g @sveltejs/kit &>/dev/null 2>&1; then
-        _log "Installing Svelte / SvelteKit tooling..."
-        npm install -g svelte @sveltejs/kit
+    if ! command -v sv &>/dev/null; then
+        _log "Installing SvelteKit CLI (sv)..."
+        npm install -g @sveltejs/cli
     fi
 }
+
+_install_python() { _install_python_tools; }
 
 _install_python_tools() {
     _ensure_uv
@@ -179,6 +195,32 @@ _install_dotnet() {
     export PATH="$HOME/.dotnet:$HOME/.dotnet/tools:$PATH"
 }
 
+_install_node() {
+    _ensure_nvm
+    export NVM_DIR
+    . "$NVM_DIR/nvm.sh"
+}
+
+_install_pnpm() {
+    _ensure_nvm
+    if ! command -v pnpm >/dev/null 2>&1; then
+        _log "Installing pnpm via corepack..."
+        corepack enable >/dev/null 2>&1 || true
+        corepack prepare pnpm@latest --activate
+        _log "pnpm $(pnpm --version) ready."
+    fi
+}
+
+_install_yarn() {
+    _ensure_nvm
+    if ! command -v yarn >/dev/null 2>&1; then
+        _log "Installing Yarn via corepack..."
+        corepack enable >/dev/null 2>&1 || true
+        corepack prepare yarn@stable --activate
+        _log "Yarn $(yarn --version) ready."
+    fi
+}
+
 _install_lazygit() {
     if ! command -v lazygit &>/dev/null; then
         _log "Installing lazygit..."
@@ -188,6 +230,158 @@ _install_lazygit() {
             | tar -xz -C "$HOME/.local/bin" lazygit
         _log "lazygit ${ver} ready."
     fi
+}
+
+_install_cpp() {
+    command -v g++ &>/dev/null && return 0
+    _log "Installing C++ tools (build-essential, clang, cmake, gdb, valgrind)..."
+    sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends \
+        build-essential clang cmake gdb valgrind
+}
+
+_install_php() {
+    command -v php &>/dev/null && return 0
+    _log "Installing PHP..."
+    sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends \
+        php-cli php-mbstring php-xml php-curl
+}
+
+_install_ruby() {
+    command -v ruby &>/dev/null && return 0
+    _log "Installing Ruby..."
+    sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ruby-full
+}
+
+_install_react_native() {
+    _ensure_nvm
+    command -v react-native &>/dev/null && return 0
+    _log "Installing React Native CLI..."
+    # better-sqlite3 (transitive dep) needs make + g++ for node-gyp
+    command -v make &>/dev/null || {
+        _log "Installing build tools for React Native native dependencies..."
+        sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends build-essential
+    }
+    npm install -g @react-native-community/cli
+}
+
+_install_expo() {
+    _ensure_nvm
+    command -v expo &>/dev/null && return 0
+    _log "Installing Expo CLI..."
+    command -v make &>/dev/null || {
+        sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends build-essential
+    }
+    npm install -g @expo/cli
+}
+
+_install_flutter() {
+    if [ -d "$HOME/.flutter/bin" ]; then
+        export PATH="$HOME/.flutter/bin:$PATH"
+        return 0
+    fi
+    # Remove any partial clone from a previous failed attempt
+    rm -rf "$HOME/.flutter"
+    _log "Installing Flutter SDK (this may take a few minutes)..."
+    if ! git clone --depth=1 https://github.com/flutter/flutter.git "$HOME/.flutter"; then
+        rm -rf "$HOME/.flutter"
+        _log "[WARN] Flutter clone failed (network timeout?) — restart container to retry"
+        return 1
+    fi
+    export PATH="$HOME/.flutter/bin:$PATH"
+    flutter precache --no-android --no-ios 2>/dev/null || true
+    _log "Flutter $(flutter --version 2>/dev/null | head -1) ready."
+}
+
+# ---------------------------------------------------------------------------
+# Catalog helpers
+# ---------------------------------------------------------------------------
+
+# Emit the merged array (tools or plugins) from /catalog.json + /catalog.user.json.
+# User entries with the same key override built-ins.
+_merged_catalog() {
+    local type="$1"  # "tools" or "plugins"
+    if [ -f /catalog.user.json ]; then
+        jq -s --arg t "$type" '
+            (.[0][$t] // []) as $base |
+            (.[1][$t] // []) as $user |
+            ($user | map(.key)) as $ukeys |
+            ([$base[] | select(.key as $k | ($ukeys | index($k)) == null)] + $user)
+        ' /catalog.json /catalog.user.json
+    else
+        jq --arg t "$type" '.[$t]' /catalog.json
+    fi
+}
+
+# Return 0 if the given plugin key is usable under the current CODING_CLI.
+# owner/repo entries (always Claude plugins) return 0 only for CODING_CLI=claude.
+_supports_cli() {
+    local key="$1" cli="${2:-$CODING_CLI}"
+    case "$key" in
+        */*)  [ "$cli" = "claude" ] && return 0 || return 1 ;;
+    esac
+    local clis
+    clis=$(_merged_catalog "plugins" \
+        | jq -r --arg k "$key" '.[] | select(.key == $k) | (.supported_clis // ["*"])[]' 2>/dev/null || true)
+    [ -z "$clis" ] && return 0  # key not in catalog — allow (user might have it in INSTALL_PLUGINS directly)
+    echo "$clis" | grep -qxF '*'   && return 0
+    echo "$clis" | grep -qxF "$cli" && return 0
+    return 1
+}
+
+# Install a tool/plugin from a user-supplied install spec.
+# Specs: npm:<pkg>  uv:<pkg>  gh:<owner/repo>  git:<url>  <raw shell>
+_install_from_git_repo() {
+    local url="$1" name="$2" sentinel_key="$3"
+    local dest="$HOME/.local/share/codetainyrrr/$name"
+    if [ ! -d "$dest" ]; then
+        git clone --depth=1 "$url" "$dest" || return 1
+    fi
+    if [ -f "$dest/install.sh" ]; then bash "$dest/install.sh" || return 1
+    elif [ -f "$dest/postinstall.sh" ]; then bash "$dest/postinstall.sh" || return 1
+    fi
+    _mark_plugin "$sentinel_key"
+}
+
+_install_from_spec() {
+    local key="$1" spec="$2"
+    local sentinel_key="custom-${key//\//_}"
+    _plugin_done "$sentinel_key" && return 0
+    _log "Installing '$key' via spec: $spec"
+    case "$spec" in
+        npm:*)
+            _ensure_nvm
+            # shellcheck disable=SC2086
+            npm install -g ${spec#npm:} && _mark_plugin "$sentinel_key" || return 1
+            ;;
+        uv:*)
+            _ensure_uv
+            uv tool install "${spec#uv:}" && _mark_plugin "$sentinel_key" || return 1
+            ;;
+        marketplace:*)
+            # marketplace:<owner/repo>:<plugin-name>[:<marketplace-name>]
+            local _rest="${spec#marketplace:}"
+            local _repo="${_rest%%:*}"
+            local _remainder="${_rest#*:}"
+            local _plugin="${_remainder%%:*}"
+            local _mkt="${_remainder#*:}"
+            # If no third segment, marketplace-name equals plugin-name
+            [ "$_mkt" = "$_plugin" ] && _mkt="$_plugin"
+            _install_claude_plugin "$_plugin" "$_repo" "$_mkt" && _mark_plugin "$sentinel_key" || return 1
+            ;;
+        gh:*)
+            local repo="${spec#gh:}"
+            local name="${repo##*/}"
+            _install_from_git_repo "https://github.com/${repo}" "$name" "$sentinel_key"
+            ;;
+        git:*)
+            local url="${spec#git:}"
+            local name="${url##*/}"; name="${name%.git}"
+            _install_from_git_repo "$url" "$name" "$sentinel_key"
+            ;;
+        *)
+            bash -c "$spec" && _mark_plugin "$sentinel_key" || return 1
+            ;;
+    esac
 }
 
 # ---------------------------------------------------------------------------
@@ -203,9 +397,14 @@ _install_claude_plugin() {
     _plugin_done "$name" && return 0
     command -v claude &>/dev/null || { _log "Skipping plugin $name — claude not installed"; return 0; }
     _log "Installing plugin $name..."
-    claude plugin marketplace add "$repo" 2>/dev/null || true
-    claude plugin install "${name}@${marketplace}" --scope user 2>/dev/null || true
-    _mark_plugin "$name"
+    local ok=0
+    claude plugin marketplace add "$repo"        2>/dev/null && ok=1 || true
+    claude plugin install "${name}@${marketplace}" --scope user 2>/dev/null && ok=1 || true
+    if [ "$ok" = "1" ]; then
+        _mark_plugin "$name"
+    else
+        _log "[WARN] Plugin $name: claude plugin commands failed — install manually inside the container with: claude plugin install $marketplace"
+    fi
 }
 
 # Generic handlers — used for custom INSTALL_PLUGINS entries
@@ -259,23 +458,33 @@ _install_plugin_graphify() {
     _plugin_done "graphify" && return 0
     _log "Installing graphify..."
     _ensure_uv
-    uv tool install graphifyy 2>/dev/null || true
-    command -v graphify &>/dev/null && { graphify install 2>/dev/null || true; _mark_plugin "graphify"; } || true
+    export PATH="$HOME/.local/bin:$PATH"
+    if uv tool install graphify; then
+        graphify install 2>/dev/null || true
+        _mark_plugin "graphify"
+    else
+        _log "[WARN] graphify install failed — run 'uv tool install graphify' inside the container to retry"
+    fi
 }
 
 _install_plugin_mempalace() {
     _plugin_done "mempalace" && return 0
     _log "Installing mempalace..."
     _ensure_uv
-    uv tool install mempalace 2>/dev/null && _mark_plugin "mempalace" || true
-    # Run: mempalace init /workspace  — inside the container on first project use
+    export PATH="$HOME/.local/bin:$PATH"
+    if uv tool install mempalace; then
+        _mark_plugin "mempalace"
+        # Run: mempalace init /workspace  — inside the container on first project use
+    else
+        _log "[WARN] mempalace install failed — run 'uv tool install mempalace' inside the container to retry"
+    fi
 }
 
-_install_plugin_everything_cc() {
+_install_plugin_everything_claude_code() {
     _install_claude_plugin "everything-claude-code" "affaan-m/everything-claude-code" "everything-claude-code"
 }
 
-_install_plugin_karpathy() {
+_install_plugin_karpathy_skills() {
     _install_claude_plugin "andrej-karpathy-skills" "forrestchang/andrej-karpathy-skills" "karpathy-skills"
 }
 
@@ -307,10 +516,8 @@ _apply_claude_defaults() {
     local settings="$HOME/.claude/settings.json"
     [ -f "$settings" ] || echo '{}' > "$settings"
     local tmp; tmp=$(mktemp)
-    jq '
-        (if has("dangerouslySkipPermissions") then . else . + {"dangerouslySkipPermissions": true} end) |
-        (if has("includeCoAuthoredBy")        then . else . + {"includeCoAuthoredBy":        false} end)
-    ' "$settings" > "$tmp" && mv "$tmp" "$settings"
+    jq '. + {"dangerouslySkipPermissions": true, "includeCoAuthoredBy": false}' \
+        "$settings" > "$tmp" && mv "$tmp" "$settings"
 }
 
 _wire_ccstatusline() {
@@ -424,116 +631,125 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# Coding CLI install
+# Coding CLI install — driven by catalog.json clis[*].install
 # ---------------------------------------------------------------------------
 
+# Normalize CLI key aliases before catalog lookup
 case "$CODING_CLI" in
-  claude)
-    _ensure_nvm
-    _ensure_rtk
-    command -v claude &>/dev/null || { curl -fsSL https://claude.ai/install.sh | bash; export PATH="$HOME/.local/bin:$PATH"; }
-    _wire_ccstatusline
-    ;;
-  opencode)
-    _ensure_nvm
-    _ensure_rtk
-    command -v opencode &>/dev/null || { curl -fsSL https://opencode.ai/install | bash; export PATH="$HOME/.local/bin:$PATH"; }
-    ;;
-  kilo|kilocode)
-    _ensure_nvm
-    _ensure_rtk
-    command -v kilo &>/dev/null || npm install -g @kilocode/cli
-    CODING_CLI=kilo
-    ;;
-  aider)
-    _ensure_uv
-    _ensure_rtk
-    command -v aider &>/dev/null || uv tool install aider-chat
-    ;;
-  goose)
-    _ensure_rtk
-    if ! command -v goose &>/dev/null; then
-        curl -fsSL https://install.goose.rs | bash
-        export PATH="$HOME/.local/bin:$HOME/.config/goose/bin:$PATH"
+    kilocode) CODING_CLI=kilo ;;
+    continue)  CODING_CLI=cn ;;
+esac
+
+_cli_spec()  { jq -r --arg k "$CODING_CLI" '.clis // [] | .[] | select(.key == $k) | .install // empty' /catalog.json 2>/dev/null || true; }
+_cli_bin()   { jq -r --arg k "$CODING_CLI" '.clis // [] | .[] | select(.key == $k) | .bin // $k'        /catalog.json 2>/dev/null || echo "$CODING_CLI"; }
+
+_install_cli() {
+    local spec="$1"
+    case "$spec" in
+        npm:*)  _ensure_nvm; npm install -g ${spec#npm:} ;;
+        uv:*)   _ensure_uv;  uv tool install "${spec#uv:}" ;;
+        *)      bash -c "$spec" ;;
+    esac
+}
+
+# Some CLIs need NVM even before the install check (e.g. claude installer uses npm)
+case "$CODING_CLI" in
+    claude|opencode|codex|gemini|kilo|cn|pi) _ensure_nvm ;;
+    aider) _ensure_uv ;;
+esac
+
+_cli_bin_val=$(_cli_bin)
+_cli_spec_val=$(_cli_spec)
+
+if ! command -v "$_cli_bin_val" &>/dev/null; then
+    if [ -n "$_cli_spec_val" ]; then
+        _log "Installing $CODING_CLI..."
+        _install_cli "$_cli_spec_val"
+        export PATH="$HOME/.local/bin:$PATH"
+    else
+        _log "[WARN] No install spec found for '$CODING_CLI' in catalog.json — add a 'clis' entry or install manually"
     fi
-    ;;
-  cn|continue)
-    _ensure_nvm
-    _ensure_rtk
-    command -v cn &>/dev/null || npm install -g @continuedev/cli
-    CODING_CLI=cn
-    ;;
-  pi)
-    _ensure_nvm
-    _ensure_rtk
-    command -v pi &>/dev/null || npm install -g @mariozechner/pi-coding-agent
-    ;;
-  codex)
-    _ensure_nvm
-    command -v codex &>/dev/null || npm install -g @openai/codex
-    ;;
-  gemini)
-    _ensure_nvm
-    command -v gemini &>/dev/null || npm install -g @google/gemini-cli
-    ;;
-  zsh|bash|sh|*) ;;
+fi
+
+# Per-CLI post-install hooks (PATH exports, settings wiring, etc.)
+case "$CODING_CLI" in
+    claude)
+        _apply_claude_defaults
+        [ "${WIRE_CCSTATUSLINE:-true}" = "true" ] && _wire_ccstatusline
+        ;;
+    opencode)
+        export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$PATH"
+        ;;
+    goose)
+        export PATH="$HOME/.local/bin:$HOME/.config/goose/bin:$PATH"
+        ;;
+    zsh|bash|sh|*) ;;
 esac
 
 # ---------------------------------------------------------------------------
 # Dev tool installs (driven by INSTALL_TOOLS env var)
 # ---------------------------------------------------------------------------
+# Convention: tool key "foo-bar" maps to installer "_install_foo_bar".
+# Add a new tool: add an entry to catalog.json and define _install_<key> here.
 
-_has_tool java       && _install_java
-_has_tool go         && _install_go
-_has_tool rust       && _install_rust
-_has_tool ts         && _install_ts
-_has_tool typescript && _install_ts
-_has_tool react      && _install_react
-_has_tool svelte     && _install_svelte
-_has_tool python     && _install_python_tools
-_has_tool deno       && _install_deno
-_has_tool bun        && _install_bun
-_has_tool dotnet     && _install_dotnet
-_has_tool lazygit    && _install_lazygit
+_run_all_tool_installs() {
+    [ -z "$INSTALL_TOOLS" ] && return 0
+    IFS=',' read -ra _tool_list <<< "$INSTALL_TOOLS"
+    for _t in "${_tool_list[@]}"; do
+        _t="${_t// /}"
+        [ -z "$_t" ] && continue
+        _has_tool "$_t" || continue
+        local _spec
+        _spec=$(_merged_catalog "tools" | jq -r --arg k "$_t" '.[] | select(.key == $k) | .install // empty' 2>/dev/null || true)
+        if [ -n "$_spec" ]; then
+            _install_from_spec "$_t" "$_spec" || _log "[WARN] $_t install failed — restart container to retry"
+            continue
+        fi
+        local _fn="_install_${_t//-/_}"
+        if declare -f "$_fn" &>/dev/null; then
+            "$_fn" || _log "[WARN] $_t install failed — it will be missing; restart container to retry"
+        else
+            _log "[WARN] No installer defined for '$_t' — skipping"
+        fi
+    done
+}
+
+_run_all_tool_installs
 
 # ---------------------------------------------------------------------------
 # Plugin installs (driven by INSTALL_PLUGINS env var)
 # ---------------------------------------------------------------------------
 
-# Claude Code plugins — only meaningful when CODING_CLI=claude
-_is_claude_plugin() {
-    case "$1" in
-        caveman|context-mode|claude-mem|claude-hud|everything-claude-code|karpathy-skills) return 0 ;;
-        */*)  return 0 ;;  # owner/repo installs are always Claude plugins
-        *)    return 1 ;;
-    esac
-}
+# Convention: plugin key "foo-bar" maps to installer "_install_plugin_foo_bar".
+# Add a new plugin: add an entry to catalog.json and define _install_plugin_<key> here.
 
 _do_plugin_installs() {
     [ -z "$INSTALL_PLUGINS" ] && return 0
     IFS=',' read -ra _plugin_list <<< "$INSTALL_PLUGINS"
     for _p in "${_plugin_list[@]}"; do
-        _p="${_p// /}"   # strip spaces
+        _p="${_p// /}"
         [ -z "$_p" ] && continue
-        if [ "$CODING_CLI" != "claude" ] && _is_claude_plugin "$_p"; then
-            _log "Skipping Claude plugin '$_p' (CODING_CLI=$CODING_CLI)"
+        if ! _supports_cli "$_p"; then
+            _log "Skipping plugin '$_p' (not supported by CODING_CLI=$CODING_CLI)"
             continue
         fi
         case "$_p" in
-            caveman)                _install_plugin_caveman ;;
-            context-mode)           _install_plugin_context_mode ;;
-            claude-mem)             _install_plugin_claude_mem ;;
-            claude-hud)             _install_plugin_claude_hud ;;
-            ccusage)                _install_plugin_ccusage ;;
-            graphify)               _install_plugin_graphify ;;
-            mempalace)              _install_plugin_mempalace ;;
-            everything-claude-code) _install_plugin_everything_cc ;;
-            karpathy-skills)        _install_plugin_karpathy ;;
-            npm:*)                  _install_plugin_npm_pkg "${_p#npm:}" ;;
-            uv:*)                   _install_plugin_uv_pkg  "${_p#uv:}" ;;
-            */*)                    _install_plugin_github  "$_p" ;;
-            *)                      _log "Unknown plugin '$_p' — use owner/repo, npm:pkg, or uv:pkg for custom installs" ;;
+            npm:*)  _install_plugin_npm_pkg "${_p#npm:}"; continue ;;
+            uv:*)   _install_plugin_uv_pkg  "${_p#uv:}"; continue ;;
+            */*)    _install_plugin_github  "$_p"; continue ;;
         esac
+        local _spec
+        _spec=$(_merged_catalog "plugins" | jq -r --arg k "$_p" '.[] | select(.key == $k) | .install // empty' 2>/dev/null || true)
+        if [ -n "$_spec" ]; then
+            _install_from_spec "$_p" "$_spec" || _log "[WARN] Plugin '$_p' install failed"
+            continue
+        fi
+        local _fn="_install_plugin_${_p//-/_}"
+        if declare -f "$_fn" &>/dev/null; then
+            "$_fn" || _log "[WARN] Plugin '$_p' install failed"
+        else
+            _log "[WARN] Unknown plugin '$_p' — use owner/repo, npm:pkg, uv:pkg, gh:owner/repo, or git:URL for custom entries"
+        fi
     done
 }
 
@@ -577,57 +793,10 @@ $PATH"
 [ -d "$HOME/go/sdk/go/bin" ] && export PATH="$HOME/go/sdk/go/bin:$HOME/go/bin:$PATH"
 
 # ---------------------------------------------------------------------------
-# Wire .zshrc (idempotent)
+# Shell setup — clone plugins + starship into home volume (idempotent)
+# .zshrc itself is baked into the image via Dockerfile.
 # ---------------------------------------------------------------------------
 _setup_zsh
-
-ZSHRC="$HOME/.zshrc"
-if ! grep -q '# codetainyrrr init' "$ZSHRC" 2>/dev/null; then
-    cat >> "$ZSHRC" <<'PROFILE'
-
-# codetainyrrr init
-
-# --- Runtimes ---
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-export SDKMAN_DIR="$HOME/.sdkman"
-[[ -s "$SDKMAN_DIR/bin/sdkman-init.sh" ]] && source "$SDKMAN_DIR/bin/sdkman-init.sh"
-[ -d "$HOME/go/sdk/go/bin" ] && export GOROOT="$HOME/go/sdk/go" GOPATH="$HOME/go"
-export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.deno/bin:$HOME/.bun/bin:$HOME/.dotnet:$HOME/.dotnet/tools:${GOROOT:+$GOROOT/bin:}${GOPATH:+$GOPATH/bin:}$PATH"
-
-# --- History ---
-HISTSIZE=50000
-SAVEHIST=50000
-HISTFILE="$HOME/.zsh_history"
-setopt HIST_IGNORE_ALL_DUPS HIST_SAVE_NO_DUPS SHARE_HISTORY HIST_REDUCE_BLANKS
-
-# --- Completion ---
-autoload -Uz compinit && compinit -C
-zstyle ':completion:*' menu select
-zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
-
-# --- Plugins ---
-_src() { [ -f "$1" ] && source "$1"; }
-_src "$HOME/.config/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
-_src "$HOME/.config/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
-
-# --- Aliases ---
-alias ll='ls -lah --color=auto'
-alias la='ls -A --color=auto'
-alias l='ls -lh --color=auto'
-alias gs='git status'
-alias gd='git diff'
-alias gl='git log --oneline -20'
-alias ..='cd ..'
-alias ...='cd ../..'
-
-# --- Prompt ---
-command -v starship &>/dev/null && eval "$(starship init zsh)"
-
-# --- User extra config (bind-mounted from host via ZSH_EXTRA_CONFIG) ---
-[ -f "$HOME/.config/zsh/extra.zsh" ] && source "$HOME/.config/zsh/extra.zsh"
-PROFILE
-fi
 
 # ---------------------------------------------------------------------------
 # Dispatch
@@ -636,7 +805,9 @@ fi
 if [ $# -eq 0 ]; then
     exec /bin/zsh -l
 elif [ "$1" = "--daemon" ]; then
-    _log "Daemon mode — connect with: docker exec -it codetainyrrr zsh"
+    mkdir -p "$HOME/.local/share/codetainyrrr"
+    touch "$HOME/.local/share/codetainyrrr/ready"
+    _log "Daemon mode — connect with: docker exec -it --user dev codetainyrrr zsh"
     exec sleep infinity
 elif [[ "$1" == --* ]] || [[ "$1" == -* ]]; then
     exec "$CODING_CLI" "$@"
