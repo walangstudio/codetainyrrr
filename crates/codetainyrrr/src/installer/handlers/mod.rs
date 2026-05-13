@@ -18,7 +18,10 @@ use tokio::process::Command;
 /// Expand `~/` and `$HOME/` prefixes to the actual home directory.
 pub(crate) fn expand_home(path: &str) -> Result<String> {
     let home = dirs::home_dir().context("could not determine home directory")?;
-    if let Some(rest) = path.strip_prefix("~/").or_else(|| path.strip_prefix("$HOME/")) {
+    if let Some(rest) = path
+        .strip_prefix("~/")
+        .or_else(|| path.strip_prefix("$HOME/"))
+    {
         return Ok(home.join(rest).to_string_lossy().into_owned());
     }
     if path == "~" || path == "$HOME" {
@@ -71,7 +74,9 @@ pub(crate) fn resolve_in_path(program: &str, path: &str) -> Option<std::path::Pa
     }
     for dir in path.split(':').filter(|s| !s.is_empty()) {
         let candidate = std::path::Path::new(dir).join(program);
-        if candidate.is_file() { return Some(candidate); }
+        if candidate.is_file() {
+            return Some(candidate);
+        }
     }
     None
 }

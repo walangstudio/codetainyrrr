@@ -8,8 +8,14 @@ use clap::{Parser, Subcommand};
 /// downstream project can rebuild with these env vars set to rebrand without
 /// touching code. The runtime catalog.json's `project` block still drives all
 /// behavior — these only theme `--help`.
-const BIN_NAME:  &str = match option_env!("CT_BIN_NAME")  { Some(s) => s, None => "codetainyrrr" };
-const BIN_ABOUT: &str = match option_env!("CT_BIN_ABOUT") { Some(s) => s, None => "AI coding container — setup, run, manage" };
+const BIN_NAME: &str = match option_env!("CT_BIN_NAME") {
+    Some(s) => s,
+    None => "codetainyrrr",
+};
+const BIN_ABOUT: &str = match option_env!("CT_BIN_ABOUT") {
+    Some(s) => s,
+    None => "AI coding container — setup, run, manage",
+};
 
 #[derive(Parser)]
 #[command(name = BIN_NAME, about = BIN_ABOUT, version)]
@@ -96,19 +102,19 @@ async fn main() -> Result<()> {
     }
 
     match cli.command {
-        Command::Setup               => cmd::setup::run(false).await,
-        Command::Reconfigure         => cmd::setup::run(true).await,
+        Command::Setup => cmd::setup::run(false).await,
+        Command::Reconfigure => cmd::setup::run(true).await,
         Command::Run { rebuild, args } => cmd::run::run(rebuild, args).await,
-        Command::Stop                => cmd::run::stop().await,
-        Command::Connect             => cmd::run::connect().await,
-        Command::Switch { cli }      => cmd::switch::run(cli).await,
-        Command::Plugins { action }  => match action {
-            PluginAction::Add    { key } => cmd::plugins::add(key).await,
+        Command::Stop => cmd::run::stop().await,
+        Command::Connect => cmd::run::connect().await,
+        Command::Switch { cli } => cmd::switch::run(cli).await,
+        Command::Plugins { action } => match action {
+            PluginAction::Add { key } => cmd::plugins::add(key).await,
             PluginAction::Remove { key } => cmd::plugins::remove(key).await,
-            PluginAction::List           => cmd::plugins::list().await,
+            PluginAction::List => cmd::plugins::list().await,
         },
-        Command::Reset { plugins }   => cmd::reset::run(plugins).await,
-        Command::Doctor              => cmd::doctor::run().await,
+        Command::Reset { plugins } => cmd::reset::run(plugins).await,
+        Command::Doctor => cmd::doctor::run().await,
         Command::Entrypoint { reconcile, daemon } => cmd::entrypoint::run(reconcile, daemon).await,
     }
 }

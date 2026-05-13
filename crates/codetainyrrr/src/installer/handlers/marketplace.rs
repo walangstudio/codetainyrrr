@@ -1,7 +1,7 @@
 /// marketplace:<owner/repo>:<plugin-name>[:<marketplace-name>]
 use super::run_cmd;
-use crate::installer::{async_trait, InstallStatus, Installer};
-use anyhow::{bail, Result};
+use crate::installer::{InstallStatus, Installer, async_trait};
+use anyhow::{Result, bail};
 
 pub struct MarketplaceHandler;
 
@@ -11,9 +11,9 @@ fn parse_spec(spec: &str) -> Result<(String, String, String)> {
     if parts.len() < 2 {
         bail!("invalid marketplace spec: {spec}");
     }
-    let repo   = parts[0].to_string();
+    let repo = parts[0].to_string();
     let plugin = parts[1].to_string();
-    let mkt    = parts.get(2).copied().unwrap_or(parts[1]).to_string();
+    let mkt = parts.get(2).copied().unwrap_or(parts[1]).to_string();
     Ok((repo, plugin, mkt))
 }
 

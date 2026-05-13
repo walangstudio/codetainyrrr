@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 use crate::config::loader;
 use crate::envfile::EnvFile;
@@ -11,7 +11,12 @@ pub async fn run(cli: String) -> Result<()> {
     let env_path = root.join(".env");
     let mut env = EnvFile::load(&env_path)?;
 
-    let valid = cfg.catalog.clis.iter().map(|c| c.key.as_str()).collect::<Vec<_>>();
+    let valid = cfg
+        .catalog
+        .clis
+        .iter()
+        .map(|c| c.key.as_str())
+        .collect::<Vec<_>>();
     if !valid.contains(&cli.as_str()) {
         bail!("Unknown CLI '{cli}'. Valid options: {}", valid.join(", "));
     }

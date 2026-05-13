@@ -2,7 +2,10 @@ use anyhow::Result;
 use console::style;
 
 use crate::config::loader;
-use crate::installer::{registry::{self, Kind}, InstallStatus};
+use crate::installer::{
+    InstallStatus,
+    registry::{self, Kind},
+};
 
 pub async fn run() -> Result<()> {
     let root = crate::config::locate_root();
@@ -37,7 +40,10 @@ pub async fn run() -> Result<()> {
 fn header(title: &str) {
     println!();
     println!("  {}", style(title).bold().underlined());
-    println!("  {}", style(format!("{:<24} {:<40} {}", "key", "description", "status")).dim());
+    println!(
+        "  {}",
+        style(format!("{:<24} {:<40} {}", "key", "description", "status")).dim()
+    );
     println!("  {}", style("─".repeat(72)).dim());
 }
 
@@ -61,7 +67,9 @@ fn row(key: &str, description: &str, status: &InstallStatus) {
         InstallStatus::NeedsUpdate { current, .. } => (
             style("↑").yellow().bold().to_string(),
             style(key).yellow().to_string(),
-            style(format!("update available (current: {current})")).yellow().to_string(),
+            style(format!("update available (current: {current})"))
+                .yellow()
+                .to_string(),
         ),
     };
 

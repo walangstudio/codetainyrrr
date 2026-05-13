@@ -68,7 +68,10 @@ async fn reset_full(container: &str) -> Result<()> {
         .status()
         .await;
     // Remove volume
-    let status = Command::new("docker").args(["volume", "rm", &volume]).status().await?;
+    let status = Command::new("docker")
+        .args(["volume", "rm", &volume])
+        .status()
+        .await?;
     if status.success() {
         println!("Volume '{volume}' removed.");
     } else {
