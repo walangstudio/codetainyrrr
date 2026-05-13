@@ -1,0 +1,85 @@
+# codetainyrrr init
+
+# --- Runtimes ---
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+export SDKMAN_DIR="$HOME/.sdkman"
+[[ -s "$SDKMAN_DIR/bin/sdkman-init.sh" ]] && source "$SDKMAN_DIR/bin/sdkman-init.sh"
+[ -d "$HOME/go/sdk/go/bin" ] && export GOROOT="$HOME/go/sdk/go" GOPATH="$HOME/go"
+export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.deno/bin:$HOME/.bun/bin:$HOME/.dotnet:$HOME/.dotnet/tools:${GOROOT:+$GOROOT/bin:}${GOPATH:+$GOPATH/bin:}$PATH"
+[ -d "$HOME/.flutter/bin" ] && export PATH="$HOME/.flutter/bin:$PATH"
+
+# --- History ---
+HISTSIZE=50000
+SAVEHIST=50000
+HISTFILE="$HOME/.zsh_history"
+setopt HIST_IGNORE_ALL_DUPS HIST_SAVE_NO_DUPS SHARE_HISTORY HIST_REDUCE_BLANKS
+
+# --- Completion ---
+autoload -Uz compinit && compinit -C
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
+
+# --- Plugins (installed lazily into home volume by entrypoint) ---
+_src() { [ -f "$1" ] && source "$1"; }
+_src "$HOME/.config/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
+_src "$HOME/.config/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+
+# --- Aliases ---
+alias ll='ls -lah --color=auto'
+alias la='ls -A --color=auto'
+alias l='ls -lh --color=auto'
+alias gs='git status'
+alias gd='git diff'
+alias gl='git log --oneline -20'
+alias ..='cd ..'
+alias ...='cd ../..'
+
+# --- Prompt ---
+command -v starship &>/dev/null && eval "$(starship init zsh)"
+
+# --- User extra config (bind-mounted from host via ZSH_EXTRA_CONFIG) ---
+[ -f "$HOME/.config/zsh/extra.zsh" ] && source "$HOME/.config/zsh/extra.zsh"
+
+# --- Welcome banner + auto-launch ---
+# Runs once per attach session. Set NO_AUTOLAUNCH=1 to skip and get a plain shell.
+if [ "${NO_AUTOLAUNCH:-0}" = "0" ] && [ -z "$_CT_LAUNCHED" ]; then
+    export _CT_LAUNCHED=1
+    _cli="${CODING_CLI:-claude}"
+    printf '\n'
+    printf '  \033[1;36m╔═══════════════════════════════════════════╗\033[0m\n'
+    printf '  \033[1;36m║           codetainyrrr  ready             ║\033[0m\n'
+    printf '  \033[1;36m╚═══════════════════════════════════════════╝\033[0m\n'
+    printf '  \033[1mCLI\033[0m     : %s\n'     "$_cli"
+    printf '  \033[1mTools\033[0m   : %s\n'     "${INSTALL_TOOLS:-none}"
+    printf '  \033[1mPlugins\033[0m : %s\n'     "${INSTALL_PLUGINS:-none}"
+    printf '  \033[2m─────────────────────────────────────────────\033[0m\n'
+    printf '  \033[1mWorkspace\033[0m : %s\n'   "${PWD}"
+    printf '  \033[2mSkip auto-launch: NO_AUTOLAUNCH=1 codetainyrrr connect\033[0m\n'
+    printf '\n'
+    _launch_cli() {
+        if [ "$_cli" = "claude" ]; then
+            claude --dangerously-skip-permissions
+        else
+            "$_cli"
+        fi
+    }
+    if command -v "$_cli" &>/dev/null; then
+        _launch_cli
+    else
+        printf '  \033[2mWaiting for entrypoint to install %s' "$_cli"
+        _ct_wait=0
+        while ! command -v "$_cli" &>/dev/null && [ $_ct_wait -lt 120 ]; do
+            printf '.'
+            sleep 3
+            hash -r 2>/dev/null
+            _ct_wait=$((_ct_wait + 1))
+        done
+        printf '\033[0m\n\n'
+        if command -v "$_cli" &>/dev/null; then
+            _launch_cli
+        else
+            printf '  \033[33m⚠\033[0m  Timed out waiting for %s. Run it manually once entrypoint finishes.\n\n' "$_cli"
+        fi
+    fi
+fi

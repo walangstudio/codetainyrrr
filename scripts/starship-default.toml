@@ -1,0 +1,31 @@
+# starship prompt config — edit me inside the container.
+# Docs: https://starship.rs/config/
+#
+# This file ships with the codetainyrrr image as a starting point. Your edits
+# live in your container's home volume (~/.config/starship.toml) and never
+# touch the host filesystem.
+
+format = """
+$directory\
+$git_branch\
+$git_status\
+$nodejs\
+$python\
+$rust\
+$cmd_duration\
+$line_break\
+$character"""
+
+[character]
+success_symbol = "[❯](green)"
+error_symbol   = "[❯](red)"
+
+[directory]
+truncation_length = 4
+truncation_symbol = "…/"
+
+[git_branch]
+symbol = " "
+
+[cmd_duration]
+min_time = 2000
