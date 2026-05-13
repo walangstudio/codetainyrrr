@@ -17,9 +17,9 @@ impl fmt::Display for InstallStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Installed { version: Some(v) } => write!(f, "installed ({v})"),
-            Self::Installed { version: None }    => write!(f, "installed"),
-            Self::Missing                        => write!(f, "missing"),
-            Self::NeedsUpdate { current, .. }   => write!(f, "outdated ({current})"),
+            Self::Installed { version: None } => write!(f, "installed"),
+            Self::Missing => write!(f, "missing"),
+            Self::NeedsUpdate { current, .. } => write!(f, "outdated ({current})"),
         }
     }
 }

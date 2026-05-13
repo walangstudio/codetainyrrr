@@ -13,8 +13,8 @@ impl EnvFile {
         if !path.exists() {
             return Ok(Self::default());
         }
-        let raw = std::fs::read_to_string(path)
-            .with_context(|| format!("reading {}", path.display()))?;
+        let raw =
+            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
         Ok(Self::parse(&raw))
     }
 
@@ -31,7 +31,11 @@ impl EnvFile {
                 let v = v.trim();
                 let was_quoted = v.starts_with('"') && v.ends_with('"') && v.len() >= 2;
                 // Strip inline comments only on unquoted values — `"# notes"` is data.
-                let v = if was_quoted { v } else { v.splitn(2, " #").next().unwrap_or(v).trim() };
+                let v = if was_quoted {
+                    v
+                } else {
+                    v.split_once(" #").map_or(v, |(left, _)| left).trim()
+                };
                 // Strip exactly one leading and trailing `"` if present.
                 // (trim_matches would gobble all of them, breaking escaped closing quotes.)
                 let v = if was_quoted { &v[1..v.len() - 1] } else { v };
@@ -40,8 +44,8 @@ impl EnvFile {
                 // rather than `"` (which a naive replace order would produce).
                 let v = if was_quoted {
                     v.replace(r"\\", "\x00")
-                     .replace(r#"\""#, "\"")
-                     .replace('\x00', "\\")
+                        .replace(r#"\""#, "\"")
+                        .replace('\x00', "\\")
                 } else {
                     v.to_string()
                 };
@@ -68,7 +72,10 @@ impl EnvFile {
         if v.is_empty() {
             vec![]
         } else {
-            v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+            v.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
         }
     }
 
@@ -106,14 +113,24 @@ impl EnvDiff {
         let old_keys: std::collections::HashSet<_> = old.values.keys().collect();
         let new_keys: std::collections::HashSet<_> = new.values.keys().collect();
 
-        let added = new_keys.difference(&old_keys).map(|k| (*k).clone()).collect();
-        let removed = old_keys.difference(&new_keys).map(|k| (*k).clone()).collect();
+        let added = new_keys
+            .difference(&old_keys)
+            .map(|k| (*k).clone())
+            .collect();
+        let removed = old_keys
+            .difference(&new_keys)
+            .map(|k| (*k).clone())
+            .collect();
         let changed = old_keys
             .intersection(&new_keys)
             .filter(|k| old.values.get(k.as_str()) != new.values.get(k.as_str()))
             .map(|k| (*k).clone())
             .collect();
 
-        Self { added, removed, changed }
+        Self {
+            added,
+            removed,
+            changed,
+        }
     }
 }

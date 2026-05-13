@@ -15,7 +15,10 @@ fn image() -> String {
 }
 
 fn docker(args: &[&str]) -> (bool, String, String) {
-    let out = Command::new("docker").args(args).output().expect("docker not on PATH");
+    let out = Command::new("docker")
+        .args(args)
+        .output()
+        .expect("docker not on PATH");
     (
         out.status.success(),
         String::from_utf8_lossy(&out.stdout).into_owned(),
@@ -25,11 +28,16 @@ fn docker(args: &[&str]) -> (bool, String, String) {
 
 #[test]
 fn version_inside_image() {
-    if skip_unless_enabled() { return; }
+    if skip_unless_enabled() {
+        return;
+    }
     let (ok, stdout, stderr) = docker(&[
-        "run", "--rm",
-        "--entrypoint", "/usr/local/bin/codetainyrrr",
-        &image(), "--version",
+        "run",
+        "--rm",
+        "--entrypoint",
+        "/usr/local/bin/codetainyrrr",
+        &image(),
+        "--version",
     ]);
     assert!(ok, "docker run --version failed: {stderr}");
     assert!(stdout.contains("codetainyrrr"), "version output: {stdout}");
@@ -37,42 +45,71 @@ fn version_inside_image() {
 
 #[test]
 fn doctor_inside_image() {
-    if skip_unless_enabled() { return; }
+    if skip_unless_enabled() {
+        return;
+    }
     let (ok, stdout, stderr) = docker(&[
-        "run", "--rm",
-        "--entrypoint", "/usr/local/bin/codetainyrrr",
-        &image(), "doctor",
+        "run",
+        "--rm",
+        "--entrypoint",
+        "/usr/local/bin/codetainyrrr",
+        &image(),
+        "doctor",
     ]);
     assert!(ok, "doctor failed: {stderr}");
-    assert!(stdout.contains("AI CLIs"), "doctor missing header: {stdout}");
+    assert!(
+        stdout.contains("AI CLIs"),
+        "doctor missing header: {stdout}"
+    );
 }
 
 #[test]
 fn plugins_list_inside_image() {
-    if skip_unless_enabled() { return; }
+    if skip_unless_enabled() {
+        return;
+    }
     let (ok, stdout, stderr) = docker(&[
-        "run", "--rm",
-        "-e", "CODING_CLI=claude",
-        "--entrypoint", "/usr/local/bin/codetainyrrr",
-        &image(), "plugins", "list",
+        "run",
+        "--rm",
+        "-e",
+        "CODING_CLI=claude",
+        "--entrypoint",
+        "/usr/local/bin/codetainyrrr",
+        &image(),
+        "plugins",
+        "list",
     ]);
     assert!(ok, "plugins list failed: {stderr}");
-    assert!(stdout.contains("Plugins"), "plugins list missing header: {stdout}");
+    assert!(
+        stdout.contains("Plugins"),
+        "plugins list missing header: {stdout}"
+    );
 }
 
 #[test]
 fn entrypoint_daemon_writes_ready_file() {
-    if skip_unless_enabled() { return; }
+    if skip_unless_enabled() {
+        return;
+    }
     let name = format!("ct_e2e_daemon_{}", std::process::id());
-    let img  = image();
+    let img = image();
 
     let (ok, _, stderr) = docker(&[
-        "run", "-d", "--name", &name,
-        "-e", "CODING_CLI=none",
-        "-e", "INSTALL_TOOLS=",
-        "-e", "INSTALL_PLUGINS=",
-        "--entrypoint", "/usr/local/bin/codetainyrrr",
-        &img, "entrypoint", "--daemon",
+        "run",
+        "-d",
+        "--name",
+        &name,
+        "-e",
+        "CODING_CLI=none",
+        "-e",
+        "INSTALL_TOOLS=",
+        "-e",
+        "INSTALL_PLUGINS=",
+        "--entrypoint",
+        "/usr/local/bin/codetainyrrr",
+        &img,
+        "entrypoint",
+        "--daemon",
     ]);
     assert!(ok, "docker run -d failed: {stderr}");
 

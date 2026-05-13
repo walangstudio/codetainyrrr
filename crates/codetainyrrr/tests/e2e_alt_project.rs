@@ -56,10 +56,13 @@ fn run_with_config_env(
     extra_env: &[(&str, &str)],
 ) -> (bool, String, String) {
     let mut cmd = Command::new(bin());
-    cmd.arg("--config-root").arg(config_root)
+    cmd.arg("--config-root")
+        .arg(config_root)
         .args(args)
         .env_remove("CODETAINYRRR_CONFIG_ROOT");
-    for (k, v) in extra_env { cmd.env(k, v); }
+    for (k, v) in extra_env {
+        cmd.env(k, v);
+    }
     let out = cmd.output().expect("running binary");
     (
         out.status.success(),
@@ -89,10 +92,22 @@ fn doctor_reads_alt_catalog() {
     assert!(ok, "doctor failed: stderr={stderr} stdout={stdout}");
 
     // Should list widgetron's items, not codetainyrrr's.
-    assert!(stdout.contains("wcli"),        "expected 'wcli' in doctor output:\n{stdout}");
-    assert!(stdout.contains("widget-fmt"),  "expected 'widget-fmt' in doctor output:\n{stdout}");
-    assert!(!stdout.contains("claude"),     "alt-project doctor leaked codetainyrrr catalog:\n{stdout}");
-    assert!(!stdout.contains("ccstatusline"),"alt-project doctor leaked codetainyrrr plugins:\n{stdout}");
+    assert!(
+        stdout.contains("wcli"),
+        "expected 'wcli' in doctor output:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("widget-fmt"),
+        "expected 'widget-fmt' in doctor output:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("claude"),
+        "alt-project doctor leaked codetainyrrr catalog:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("ccstatusline"),
+        "alt-project doctor leaked codetainyrrr plugins:\n{stdout}"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -102,17 +117,20 @@ fn plugins_list_reads_alt_catalog() {
     let dir = tmp_dir("alt-plugins");
     write_alt_project(&dir);
 
-    let (ok, stdout, stderr) = run_with_config_env(
-        &["plugins", "list"],
-        &dir,
-        &[("CODING_CLI", "wcli")],
-    );
+    let (ok, stdout, stderr) =
+        run_with_config_env(&["plugins", "list"], &dir, &[("CODING_CLI", "wcli")]);
     assert!(ok, "plugins list failed: stderr={stderr} stdout={stdout}");
 
     // Default CLI from alt project's project.default_cli is "wcli", so widget-stats
     // (supported_clis=["wcli"]) should appear; codetainyrrr plugins must not.
-    assert!(stdout.contains("widget-stats"), "expected 'widget-stats':\n{stdout}");
-    assert!(!stdout.contains("ccusage"),     "alt-project plugins list leaked codetainyrrr:\n{stdout}");
+    assert!(
+        stdout.contains("widget-stats"),
+        "expected 'widget-stats':\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("ccusage"),
+        "alt-project plugins list leaked codetainyrrr:\n{stdout}"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }

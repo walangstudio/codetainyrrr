@@ -1,7 +1,7 @@
 /// Handler for `merge-json:<target-path>:<cmd>` specs.
 /// Runs `cmd`, captures its JSON stdout, and deep-merges into `target-path`.
 /// Completely generic — driven entirely by the catalog spec.
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 
 use super::expand_home;
@@ -14,9 +14,9 @@ impl Installer for MergeJsonHandler {
     async fn install(&self, _key: &str, spec: &str) -> Result<()> {
         let rest = spec.strip_prefix("merge-json:").unwrap_or(spec);
         // Split on first ':' only — the path may contain other chars but no ':'
-        let (raw_path, cmd) = rest
-            .split_once(':')
-            .with_context(|| format!("merge-json: spec must be merge-json:<path>:<cmd>, got: {spec}"))?;
+        let (raw_path, cmd) = rest.split_once(':').with_context(|| {
+            format!("merge-json: spec must be merge-json:<path>:<cmd>, got: {spec}")
+        })?;
 
         let target = expand_home(raw_path)?;
 

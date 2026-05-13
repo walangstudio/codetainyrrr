@@ -11,7 +11,11 @@ pub struct Config {
 pub fn load(root: &Path) -> Result<Config> {
     let catalog = load_catalog(root)?;
     let wizard = load_wizard(root)?;
-    Ok(Config { catalog, wizard, root: root.to_path_buf() })
+    Ok(Config {
+        catalog,
+        wizard,
+        root: root.to_path_buf(),
+    })
 }
 
 fn load_catalog(root: &Path) -> Result<Catalog> {
@@ -43,7 +47,7 @@ fn merge_catalogs(mut base: Catalog, user: Catalog) -> Catalog {
 }
 
 fn merge_by_key<T, F: Fn(&T) -> String>(base: &mut Vec<T>, user: Vec<T>, key_fn: F) {
-    let user_keys: std::collections::HashSet<String> = user.iter().map(|x| key_fn(x)).collect();
+    let user_keys: std::collections::HashSet<String> = user.iter().map(&key_fn).collect();
     base.retain(|x| !user_keys.contains(&key_fn(x)));
     base.extend(user);
 }
@@ -52,19 +56,18 @@ fn load_wizard(root: &Path) -> Result<WizardDef> {
     let local = root.join("wizard.json");
     if local.exists() {
         return serde_json::from_str(
-            &std::fs::read_to_string(&local).with_context(|| format!("reading {}", local.display()))?,
+            &std::fs::read_to_string(&local)
+                .with_context(|| format!("reading {}", local.display()))?,
         )
         .context("parsing wizard.json");
     }
-    // Last-resort fallbacks for known container layouts.
-    for fallback in ["/etc/codetainyrrr/wizard.json"] {
-        let p = PathBuf::from(fallback);
-        if p.exists() {
-            return serde_json::from_str(
-                &std::fs::read_to_string(&p).with_context(|| format!("reading {}", p.display()))?,
-            )
-            .context("parsing wizard.json");
-        }
+    // Last-resort fallback for known container layout.
+    let p = PathBuf::from("/etc/codetainyrrr/wizard.json");
+    if p.exists() {
+        return serde_json::from_str(
+            &std::fs::read_to_string(&p).with_context(|| format!("reading {}", p.display()))?,
+        )
+        .context("parsing wizard.json");
     }
     anyhow::bail!("wizard.json not found in {}", root.display())
 }

@@ -7,7 +7,7 @@
 ///   2. every wizard page declared in JSON is reachable to the runtime
 ///   3. project meta defaults round-trip (catalog with no `project` block
 ///      still loads with sensible defaults)
-use codetainyrrr::config::{loader, ProjectMeta};
+use codetainyrrr::config::{ProjectMeta, loader};
 use std::path::PathBuf;
 
 fn tmp(name: &str) -> PathBuf {
@@ -21,19 +21,27 @@ fn tmp(name: &str) -> PathBuf {
 #[test]
 fn loads_alt_wizard_and_catalog() {
     let dir = tmp("alt-load");
-    std::fs::write(dir.join("catalog.json"), r#"{
+    std::fs::write(
+        dir.join("catalog.json"),
+        r#"{
         "project": { "name": "alt", "binary_name": "alt" },
         "clis": [{ "key": "x", "name": "X", "description": "x", "bin": "x", "install": "npm:x" }],
         "tools": [],
         "plugins": []
-    }"#).unwrap();
-    std::fs::write(dir.join("wizard.json"), r#"{
+    }"#,
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("wizard.json"),
+        r#"{
         "pages": [
             { "id": "cli", "title": "Pick", "fields": [
                 { "id": "CODING_CLI", "type": "single_select", "default": "x" }
             ]}
         ]
-    }"#).unwrap();
+    }"#,
+    )
+    .unwrap();
 
     let cfg = loader::load(&dir).expect("alt config should load");
     assert_eq!(cfg.catalog.project.name, "alt");
@@ -48,9 +56,13 @@ fn loads_alt_wizard_and_catalog() {
 #[test]
 fn project_meta_defaults_when_omitted() {
     let dir = tmp("defaults");
-    std::fs::write(dir.join("catalog.json"), r#"{
+    std::fs::write(
+        dir.join("catalog.json"),
+        r#"{
         "clis": [], "tools": [], "plugins": []
-    }"#).unwrap();
+    }"#,
+    )
+    .unwrap();
     std::fs::write(dir.join("wizard.json"), r#"{ "pages": [] }"#).unwrap();
 
     let cfg = loader::load(&dir).unwrap();
@@ -64,11 +76,19 @@ fn project_meta_defaults_when_omitted() {
 
 #[test]
 fn outro_template_substitutes_binary_name() {
-    let mut p = ProjectMeta::default();
-    p.binary_name = "ferris".into();
+    let p = ProjectMeta {
+        binary_name: "ferris".into(),
+        ..Default::default()
+    };
     let rendered = p.outro_template.replace("{binary}", &p.binary_name);
-    assert!(rendered.contains("ferris"), "binary substitution failed: {rendered}");
-    assert!(!rendered.contains("{binary}"), "placeholder leaked: {rendered}");
+    assert!(
+        rendered.contains("ferris"),
+        "binary substitution failed: {rendered}"
+    );
+    assert!(
+        !rendered.contains("{binary}"),
+        "placeholder leaked: {rendered}"
+    );
 }
 
 #[test]
