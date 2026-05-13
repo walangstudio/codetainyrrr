@@ -59,7 +59,7 @@ pub async fn run(_reconcile: bool, daemon: bool) -> Result<()> {
     {
         use std::os::unix::process::CommandExt;
         let err = std::process::Command::new("zsh").exec();
-        return Err(anyhow::anyhow!("exec zsh: {err}"));
+        Err(anyhow::anyhow!("exec zsh: {err}"))
     }
     #[cfg(not(unix))]
     anyhow::bail!("entrypoint is only supported on Linux/macOS")
