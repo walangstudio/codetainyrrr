@@ -1,16 +1,29 @@
-# syntax=docker/dockerfile:1.7
+# ── Stage 1: build the codetainyrrr binary ────────────────────────────────────
+FROM rust:slim-bookworm AS builder
+
+WORKDIR /build
+
+# Cache dependency compilation separately from source changes.
+# Copy manifests first, build a dummy main, then replace with real source.
+COPY Cargo.toml Cargo.lock ./
+COPY crates/codetainyrrr/Cargo.toml crates/codetainyrrr/
+RUN mkdir -p crates/codetainyrrr/src \
+    && echo 'fn main(){}' > crates/codetainyrrr/src/main.rs \
+    && cargo build --release --manifest-path crates/codetainyrrr/Cargo.toml \
+    && rm crates/codetainyrrr/src/main.rs
+
+# Now build the real source
+COPY crates/codetainyrrr/src crates/codetainyrrr/src
+RUN touch crates/codetainyrrr/src/main.rs \
+    && cargo build --release --manifest-path crates/codetainyrrr/Cargo.toml
+
+# ── Stage 2: runtime image ────────────────────────────────────────────────────
 FROM debian:bookworm-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG HOST_UID=1000
 ARG HOST_GID=1000
 ARG USERNAME=dev
-
-# System tools that require apt — set to "true" to bake into the image.
-# After changing these, rebuild with: ./run.sh --build
-ARG INSTALL_CPP=false
-ARG INSTALL_PHP=false
-ARG INSTALL_RUBY=false
 
 # Base packages always installed
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -38,17 +51,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && echo 'LANG=en_US.UTF-8' > /etc/default/locale \
     && rm -rf /var/lib/apt/lists/*
 
-# Optional system packages — combined into one layer to keep image size down
-RUN set -e; \
-    PKGS=""; \
-    [ "$INSTALL_CPP"  = "true" ] && PKGS="$PKGS build-essential clang cmake gdb valgrind"; \
-    [ "$INSTALL_PHP"  = "true" ] && PKGS="$PKGS php-cli php-mbstring php-xml php-curl"; \
-    [ "$INSTALL_RUBY" = "true" ] && PKGS="$PKGS ruby-full"; \
-    if [ -n "$PKGS" ]; then \
-        apt-get update && apt-get install -y --no-install-recommends $PKGS \
-        && rm -rf /var/lib/apt/lists/*; \
-    fi
-
 ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8
@@ -71,10 +73,12 @@ USER ${USERNAME}
 
 # Pre-create home subdirs owned by the dev user so volume seeding has the right structure.
 RUN mkdir -p \
+    ~/.cache \
     ~/.nvm \
     ~/.sdkman \
-    ~/.config \
+    ~/.config/zsh \
     ~/.local/bin \
+    ~/.local/share/codetainyrrr \
     ~/.claude \
     ~/.continue \
     ~/.pi \
@@ -89,12 +93,29 @@ RUN mkdir -p \
     ~/.gemini \
     ~/workspaces
 
-# Switch back to root — entrypoint starts as root, fixes /home/dev ownership,
-# then drops to the dev user via gosu before running any user code.
+# Bake .zshrc into the image so connecting immediately gets a proper shell
+COPY --chown=${USERNAME}:${USERNAME} scripts/zshrc /home/${USERNAME}/.zshrc
+
+# Bake the project's default user-editable configs into the dev user's home.
+# Volume init copies these into the container's home volume on first mount, so
+# the user gets a sensible starting config and can edit it inside the container.
+# These ship with the project — they do NOT bind-mount or read from the host.
+COPY --chown=${USERNAME}:${USERNAME} scripts/ccstatusline-default.json /home/${USERNAME}/.config/ccstatusline/settings.json
+COPY --chown=${USERNAME}:${USERNAME} scripts/starship-default.toml      /home/${USERNAME}/.config/starship.toml
+COPY --chown=${USERNAME}:${USERNAME} scripts/zshrc-extra-default.zsh    /home/${USERNAME}/.config/zsh/extra.zsh
+
 USER root
 
 WORKDIR /workspace
 
+# Install the codetainyrrr binary
+COPY --from=builder /build/target/release/codetainyrrr /usr/local/bin/codetainyrrr
+
+# Bake catalog.json + wizard.json so the entrypoint can read them without a bind-mount
+COPY catalog.json  /etc/codetainyrrr/catalog.json
+COPY wizard.json   /etc/codetainyrrr/wizard.json
+
+# Thin entrypoint shim: fix ownership as root, drop to dev user, hand off to Rust binary
 COPY scripts/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

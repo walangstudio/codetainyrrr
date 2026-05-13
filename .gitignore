@@ -3,6 +3,9 @@
 .env*
 !env.example
 
+# User-local catalog additions — gitignored, mounted into container by `codetainyrrr run`
+catalog.user.json
+
 # Default project mount (your code lives here, not the container's)
 workspace/
 
@@ -27,3 +30,8 @@ temp/
 # Local build/test artifacts
 *.tgz
 *.tar.gz
+
+# Rust build output
+target/
+# Keep Cargo.lock for reproducible builds (binary crate)
+

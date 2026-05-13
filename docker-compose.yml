@@ -10,14 +10,14 @@ name: codetainyrrr
 # one volume: docker volume rm codetainyrrr_ct_home
 #
 # To share ~/.claude with Claude Desktop on the host, set CLAUDE_DIR in .env —
-# run.sh / run.ps1 will overlay a bind-mount on top of this volume.
+# `codetainyrrr run` will overlay a bind-mount on top of this volume.
 # ---------------------------------------------------------------------------
 volumes:
   ct_home:
 
 # ---------------------------------------------------------------------------
 # Networks — isolated bridge by default.
-# To connect to a project's containers, use ./run.sh --network <name>
+# To connect to a project's containers, pass --network via `codetainyrrr run -- --network <name>`
 # or uncomment the example block and add it to the service networks list.
 # ---------------------------------------------------------------------------
 networks:
@@ -39,7 +39,7 @@ services:
         HOST_UID: ${HOST_UID:-1000}
         HOST_GID: ${HOST_GID:-1000}
         USERNAME: dev
-        # System tools baked into image — set to "true" and run ./run.sh --build
+        # System tools baked into image — set to "true"; `codetainyrrr run` rebuilds when needed.
         INSTALL_CPP:  ${INSTALL_CPP:-false}
         INSTALL_PHP:  ${INSTALL_PHP:-false}
         INSTALL_RUBY: ${INSTALL_RUBY:-false}
@@ -60,6 +60,7 @@ services:
 
       # CLI: claude | codex | gemini | opencode | pi | goose | aider | kilo | cn
       - CODING_CLI=${CODING_CLI:-claude}
+      - WIRE_CCSTATUSLINE=${WIRE_CCSTATUSLINE:-true}
 
       # Dev tools installed at container start (home-dir installable):
       # java, go, rust, ts, react, svelte, python, deno, bun, dotnet,lazygit
@@ -92,12 +93,12 @@ services:
 
     volumes:
       # Primary workspace — mounts at /workspace/<dirname> so projects sit side by side.
-      # run.sh / run.ps1 resolve the dirname automatically from PROJECT_DIR.
+      # `codetainyrrr run` resolves the dirname automatically from PROJECT_DIR.
       # If running docker compose directly, adjust the target path to match your project name.
       - ${PROJECT_DIR:-./workspace}:/workspace/workspace:z
 
       # Additional workspaces — each mounts at /workspace/<dirname>.
-      # Managed by run.sh / run.ps1 from EXTRA_WORKSPACES in .env.
+      # Managed by `codetainyrrr run` from EXTRA_WORKSPACES in .env.
       # Cannot be declared statically here because the list is dynamic.
 
       # Single home volume — persists everything: tools, CLI state, shell config.
