@@ -13,7 +13,7 @@ pub struct NvmHandler;
 fn to_nvm_install_arg(v: &str) -> String {
     match v {
         "lts" | "lts/*" => "--lts".into(),
-        other           => other.into(),
+        other => other.into(),
     }
 }
 
@@ -30,7 +30,7 @@ impl Installer for NvmHandler {
     async fn install(&self, _key: &str, spec: &str) -> Result<()> {
         let version = spec.strip_prefix("nvm:").unwrap_or("lts");
         let install_arg = to_nvm_install_arg(version);
-        let alias_arg   = to_nvm_alias_target(version);
+        let alias_arg = to_nvm_alias_target(version);
         // `set -e` so any step failing aborts. `node --version` at the end is
         // the real success gate — without it, nvm warning-but-exit-0 would
         // silently leave us with no node.

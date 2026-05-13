@@ -45,8 +45,16 @@ fn version_flag_works() {
 #[test]
 fn every_subcommand_has_help() {
     for sub in [
-        "setup", "reconfigure", "run", "stop", "connect",
-        "switch", "plugins", "reset", "doctor", "entrypoint",
+        "setup",
+        "reconfigure",
+        "run",
+        "stop",
+        "connect",
+        "switch",
+        "plugins",
+        "reset",
+        "doctor",
+        "entrypoint",
     ] {
         assert_help(&[sub]);
     }

@@ -1,5 +1,5 @@
 use super::run_cmd;
-use crate::installer::{async_trait, InstallStatus, Installer};
+use crate::installer::{InstallStatus, Installer, async_trait};
 use anyhow::Result;
 
 pub struct NpmHandler;

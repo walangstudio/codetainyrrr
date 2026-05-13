@@ -1,5 +1,5 @@
 use super::run_sh;
-use crate::installer::{async_trait, InstallStatus, Installer};
+use crate::installer::{InstallStatus, Installer, async_trait};
 use anyhow::Result;
 
 /// Handles raw shell-pipe specs: `curl -fsSL <url> | bash` and similar.
@@ -13,7 +13,9 @@ impl Installer for ShellPipeHandler {
 
     async fn uninstall(&self, _key: &str, _spec: &str) -> Result<()> {
         // shell-pipe installs have opaque uninstall paths; mark sentinel removed and warn.
-        eprintln!("warn: no automatic uninstall for shell-pipe installs — sentinel removed, binary may remain");
+        eprintln!(
+            "warn: no automatic uninstall for shell-pipe installs — sentinel removed, binary may remain"
+        );
         Ok(())
     }
 

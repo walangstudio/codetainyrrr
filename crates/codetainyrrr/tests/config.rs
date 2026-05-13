@@ -5,8 +5,10 @@ fn repo_root() -> PathBuf {
     // CARGO_MANIFEST_DIR = <repo>/crates/codetainyrrr
     // two parents → <repo>
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent().unwrap()  // <repo>/crates
-        .parent().unwrap()  // <repo>
+        .parent()
+        .unwrap() // <repo>/crates
+        .parent()
+        .unwrap() // <repo>
         .to_path_buf()
 }
 
@@ -18,9 +20,12 @@ fn catalog_parses_without_error() {
     let catalog: codetainyrrr::config::Catalog =
         serde_json::from_str(&raw).expect("catalog.json failed to parse");
 
-    assert!(!catalog.clis.is_empty(),   "catalog.clis must not be empty");
-    assert!(!catalog.tools.is_empty(),  "catalog.tools must not be empty");
-    assert!(!catalog.plugins.is_empty(),"catalog.plugins must not be empty");
+    assert!(!catalog.clis.is_empty(), "catalog.clis must not be empty");
+    assert!(!catalog.tools.is_empty(), "catalog.tools must not be empty");
+    assert!(
+        !catalog.plugins.is_empty(),
+        "catalog.plugins must not be empty"
+    );
 }
 
 #[test]
@@ -30,7 +35,11 @@ fn catalog_clis_all_have_install_spec() {
     let catalog: codetainyrrr::config::Catalog = serde_json::from_str(&raw).unwrap();
 
     for cli in &catalog.clis {
-        assert!(!cli.install.is_empty(), "CLI '{}' has an empty install spec", cli.key);
+        assert!(
+            !cli.install.is_empty(),
+            "CLI '{}' has an empty install spec",
+            cli.key
+        );
     }
 }
 
@@ -40,7 +49,10 @@ fn catalog_claude_entry_correct() {
     let raw = std::fs::read_to_string(root.join("catalog.json")).unwrap();
     let catalog: codetainyrrr::config::Catalog = serde_json::from_str(&raw).unwrap();
 
-    let claude = catalog.clis.iter().find(|c| c.key == "claude")
+    let claude = catalog
+        .clis
+        .iter()
+        .find(|c| c.key == "claude")
         .expect("claude not found in catalog.clis");
 
     assert_eq!(claude.bin, "claude");
@@ -66,8 +78,14 @@ fn wizard_pages_have_correct_ids() {
     let wizard: codetainyrrr::config::WizardDef = serde_json::from_str(&raw).unwrap();
 
     let expected_ids = [
-        "cli", "paths", "claude_settings", "api_keys",
-        "git_identity", "tools", "plugins", "custom_configs",
+        "cli",
+        "paths",
+        "claude_settings",
+        "api_keys",
+        "git_identity",
+        "tools",
+        "plugins",
+        "custom_configs",
     ];
     for (page, expected_id) in wizard.pages.iter().zip(expected_ids.iter()) {
         assert_eq!(page.id, *expected_id, "page id mismatch");
@@ -83,11 +101,14 @@ fn wizard_all_field_prompts_non_empty() {
     for page in &wizard.pages {
         for field in &page.fields {
             // Fields sourced from catalog (single_select / multiselect) don't need a prompt
-            if field.source.is_some() { continue; }
+            if field.source.is_some() {
+                continue;
+            }
             assert!(
                 !field.prompt.is_empty(),
                 "page '{}' field '{}' has an empty prompt",
-                page.id, field.id
+                page.id,
+                field.id
             );
         }
     }
@@ -112,11 +133,13 @@ fn loader_merges_user_catalog_overrides() {
     let user: Catalog = serde_json::from_str(user_json).unwrap();
 
     // Replicate merge logic: user overrides base by key
-    let user_cli_keys: std::collections::HashSet<_> = user.clis.iter().map(|c| c.key.clone()).collect();
+    let user_cli_keys: std::collections::HashSet<_> =
+        user.clis.iter().map(|c| c.key.clone()).collect();
     base.clis.retain(|c| !user_cli_keys.contains(&c.key));
     base.clis.extend(user.clis);
 
-    let user_tool_keys: std::collections::HashSet<_> = user.tools.iter().map(|t| t.key.clone()).collect();
+    let user_tool_keys: std::collections::HashSet<_> =
+        user.tools.iter().map(|t| t.key.clone()).collect();
     base.tools.retain(|t| !user_tool_keys.contains(&t.key));
     base.tools.extend(user.tools);
 
