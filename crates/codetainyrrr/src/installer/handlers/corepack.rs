@@ -10,7 +10,11 @@ pub struct CorepackHandler;
 impl Installer for CorepackHandler {
     async fn install(&self, _key: &str, spec: &str) -> Result<()> {
         let package = spec.strip_prefix("corepack:").unwrap_or(spec);
-        run_cmd("corepack", &["prepare", &format!("{package}@latest"), "--activate"]).await
+        run_cmd(
+            "corepack",
+            &["prepare", &format!("{package}@latest"), "--activate"],
+        )
+        .await
     }
 
     async fn uninstall(&self, _key: &str, _spec: &str) -> Result<()> {

@@ -33,16 +33,30 @@ fn eval_condition(expr: &str, env: &EnvFile) -> bool {
     let s = expr.trim();
     let extract = |op: &str| -> Option<(String, String)> {
         let (lhs, rhs) = s.split_once(op)?;
-        let var = lhs.trim().trim_start_matches("${").trim_end_matches('}').trim().to_string();
+        let var = lhs
+            .trim()
+            .trim_start_matches("${")
+            .trim_end_matches('}')
+            .trim()
+            .to_string();
         let lit = rhs.trim().trim_matches('\'').trim_matches('"').to_string();
         Some((var, lit))
     };
-    if let Some((v, lit)) = extract("==") { return env.get(&v) == lit; }
-    if let Some((v, lit)) = extract("!=") { return env.get(&v) != lit; }
-    if let Some((v, lit)) = s.split_once(" in ").and_then(|(l, r)| {
-        let var = l.trim().trim_start_matches("${").trim_end_matches('}').trim().to_string();
+    if let Some((v, lit)) = extract("==") {
+        return env.get(&v) == lit;
+    }
+    if let Some((v, lit)) = extract("!=") {
+        return env.get(&v) != lit;
+    }
+    if let Some((v, lit)) = s.split_once(" in ").map(|(l, r)| {
+        let var = l
+            .trim()
+            .trim_start_matches("${")
+            .trim_end_matches('}')
+            .trim()
+            .to_string();
         let lit = r.trim().trim_matches('\'').trim_matches('"').to_string();
-        Some((var, lit))
+        (var, lit)
     }) {
         return lit.split(',').map(|x| x.trim()).any(|x| x == env.get(&v));
     }
@@ -50,22 +64,34 @@ fn eval_condition(expr: &str, env: &EnvFile) -> bool {
 }
 
 fn page_by_id<'a>(wizard: &'a WizardDef, id: &str) -> &'a WizardPage {
-    wizard.pages.iter().find(|p| p.id == id)
+    wizard
+        .pages
+        .iter()
+        .find(|p| p.id == id)
         .unwrap_or_else(|| panic!("wizard.json missing required page id '{id}'"))
 }
 
 fn page_should_run(page: &WizardPage, env: &EnvFile) -> bool {
-    page.condition.as_deref().map(|c| eval_condition(c, env)).unwrap_or(true)
+    page.condition
+        .as_deref()
+        .map(|c| eval_condition(c, env))
+        .unwrap_or(true)
 }
 
 // ── Pages ────────────────────────────────────────────────────────────────────
 
 fn page_cli(wizard: &WizardDef, catalog: &Catalog, env: &mut EnvFile) -> Result<Nav> {
     let page = page_by_id(wizard, "cli");
-    if !page_should_run(page, env) { return Ok(Nav::Skip); }
+    if !page_should_run(page, env) {
+        return Ok(Nav::Skip);
+    }
 
     let current_cli = env.get("CODING_CLI").to_string();
-    let default_cli = if current_cli.is_empty() { catalog.project.default_cli.as_str() } else { &current_cli };
+    let default_cli = if current_cli.is_empty() {
+        catalog.project.default_cli.as_str()
+    } else {
+        &current_cli
+    };
 
     let mut sel = select(format!("{}  {}", page.title, page.description));
     for c in &catalog.clis {
@@ -74,38 +100,65 @@ fn page_cli(wizard: &WizardDef, catalog: &Catalog, env: &mut EnvFile) -> Result<
     let cli_val: &str = ask!(sel.initial_value(default_cli).interact());
     env.set("CODING_CLI", cli_val);
 
-    let container_field = page.fields.iter().find(|f| f.id == "CONTAINER_NAME").unwrap();
+    let container_field = page
+        .fields
+        .iter()
+        .find(|f| f.id == "CONTAINER_NAME")
+        .unwrap();
     let default_container = {
         let current = env.get("CONTAINER_NAME").to_string();
-        if current.is_empty() { container_field.default.clone() } else { current }
+        if current.is_empty() {
+            container_field.default.clone()
+        } else {
+            current
+        }
     };
-    let container_val: String = ask!(input(&container_field.prompt)
-        .default_input(&default_container)
-        .interact());
-    env.set("CONTAINER_NAME", if container_val.is_empty() { &default_container } else { &container_val });
+    let container_val: String = ask!(
+        input(&container_field.prompt)
+            .default_input(&default_container)
+            .interact()
+    );
+    env.set(
+        "CONTAINER_NAME",
+        if container_val.is_empty() {
+            &default_container
+        } else {
+            &container_val
+        },
+    );
 
     Ok(Nav::Forward)
 }
 
 fn page_paths(wizard: &WizardDef, _catalog: &Catalog, env: &mut EnvFile) -> Result<Nav> {
     let page = page_by_id(wizard, "paths");
-    if !page_should_run(page, env) { return Ok(Nav::Skip); }
+    if !page_should_run(page, env) {
+        return Ok(Nav::Skip);
+    }
 
     let proj_field = page.fields.iter().find(|f| f.id == "PROJECT_DIR").unwrap();
     let current = env.get("PROJECT_DIR").to_string();
 
-    let project_dir: String = ask!(input(&proj_field.prompt)
-        .default_input(&current)
-        .validate(|v: &String| {
-            if v.is_empty() { Err("Project directory is required") } else { Ok(()) }
-        })
-        .interact());
+    let project_dir: String = ask!(
+        input(&proj_field.prompt)
+            .default_input(&current)
+            .validate(|v: &String| {
+                if v.is_empty() {
+                    Err("Project directory is required")
+                } else {
+                    Ok(())
+                }
+            })
+            .interact()
+    );
     env.set("PROJECT_DIR", &project_dir);
 
-    let extra_ws: String = ask!(input("Extra workspaces (semicolon-separated, or blank):")
-        .default_input(env.get("EXTRA_WORKSPACES"))
-        .required(false)
-        .interact());
+    let extra_ws: String = ask!(
+        input("Extra workspaces (semicolon-separated, or blank):")
+            .default_input(env.get("EXTRA_WORKSPACES"))
+            .required(false)
+            .interact()
+    );
     env.set("EXTRA_WORKSPACES", &extra_ws);
 
     Ok(Nav::Forward)
@@ -113,26 +166,34 @@ fn page_paths(wizard: &WizardDef, _catalog: &Catalog, env: &mut EnvFile) -> Resu
 
 fn page_claude(wizard: &WizardDef, _catalog: &Catalog, env: &mut EnvFile) -> Result<Nav> {
     let page = page_by_id(wizard, "claude_settings");
-    if !page_should_run(page, env) { return Ok(Nav::Skip); }
+    if !page_should_run(page, env) {
+        return Ok(Nav::Skip);
+    }
 
-    let share: bool = ask!(confirm(format!("{} — {}", page.title, page.hint))
-        .initial_value(!env.get("CLAUDE_DIR").is_empty())
-        .interact());
+    let share: bool = ask!(
+        confirm(format!("{} — {}", page.title, page.hint))
+            .initial_value(!env.get("CLAUDE_DIR").is_empty())
+            .interact()
+    );
 
     if share {
-        let dir_field  = page.fields.iter().find(|f| f.id == "CLAUDE_DIR").unwrap();
+        let dir_field = page.fields.iter().find(|f| f.id == "CLAUDE_DIR").unwrap();
         let json_field = page.fields.iter().find(|f| f.id == "CLAUDE_JSON").unwrap();
 
-        let claude_dir: String = ask!(input(&dir_field.prompt)
-            .default_input(env.get("CLAUDE_DIR"))
-            .required(dir_field.required)
-            .interact());
+        let claude_dir: String = ask!(
+            input(&dir_field.prompt)
+                .default_input(env.get("CLAUDE_DIR"))
+                .required(dir_field.required)
+                .interact()
+        );
         env.set("CLAUDE_DIR", &claude_dir);
 
-        let claude_json: String = ask!(input(&json_field.prompt)
-            .default_input(env.get("CLAUDE_JSON"))
-            .required(json_field.required)
-            .interact());
+        let claude_json: String = ask!(
+            input(&json_field.prompt)
+                .default_input(env.get("CLAUDE_JSON"))
+                .required(json_field.required)
+                .interact()
+        );
         env.set("CLAUDE_JSON", &claude_json);
     } else {
         env.set("CLAUDE_DIR", "");
@@ -144,16 +205,21 @@ fn page_claude(wizard: &WizardDef, _catalog: &Catalog, env: &mut EnvFile) -> Res
 
 fn page_keys(wizard: &WizardDef, catalog: &Catalog, env: &mut EnvFile) -> Result<Nav> {
     let page = page_by_id(wizard, "api_keys");
-    if !page_should_run(page, env) { return Ok(Nav::Skip); }
+    if !page_should_run(page, env) {
+        return Ok(Nav::Skip);
+    }
 
     let cli_key = env.get("CODING_CLI").to_string();
     let needed: Vec<String> = if page.auto_keys {
-        catalog.clis.iter()
+        catalog
+            .clis
+            .iter()
             .find(|c| c.key == cli_key)
             .map(|c| c.needs_keys.clone())
             .unwrap_or_default()
     } else {
-        page.fields.iter()
+        page.fields
+            .iter()
             .filter(|f| f.field_type == FieldType::Secret)
             .map(|f| f.id.clone())
             .collect()
@@ -161,7 +227,8 @@ fn page_keys(wizard: &WizardDef, catalog: &Catalog, env: &mut EnvFile) -> Result
 
     if needed.is_empty() {
         cliclack::log::info(format!(
-            "{} requires no API keys (OAuth or no auth). Skipping.", cli_key
+            "{} requires no API keys (OAuth or no auth). Skipping.",
+            cli_key
         ))?;
         return Ok(Nav::Forward);
     }
@@ -176,7 +243,11 @@ fn page_keys(wizard: &WizardDef, catalog: &Catalog, env: &mut EnvFile) -> Result
             .map(|f| f.hint.clone())
             .filter(|h| !h.is_empty())
             .unwrap_or_else(|| {
-                if required { "required".into() } else { "blank = keep existing or skip".into() }
+                if required {
+                    "required".into()
+                } else {
+                    "blank = keep existing or skip".into()
+                }
             });
 
         let current = env.get(key_id).to_string();
@@ -199,14 +270,18 @@ fn page_keys(wizard: &WizardDef, catalog: &Catalog, env: &mut EnvFile) -> Result
 
 fn page_git(wizard: &WizardDef, _catalog: &Catalog, env: &mut EnvFile) -> Result<Nav> {
     let page = page_by_id(wizard, "git_identity");
-    if !page_should_run(page, env) { return Ok(Nav::Skip); }
+    if !page_should_run(page, env) {
+        return Ok(Nav::Skip);
+    }
 
     for field in &page.fields {
         let current = env.get(&field.id).to_string();
-        let val: String = ask!(input(&field.prompt)
-            .default_input(&current)
-            .required(field.required)
-            .interact());
+        let val: String = ask!(
+            input(&field.prompt)
+                .default_input(&current)
+                .required(field.required)
+                .interact()
+        );
         env.set(&field.id, &val);
     }
 
@@ -218,7 +293,7 @@ fn page_git(wizard: &WizardDef, _catalog: &Catalog, env: &mut EnvFile) -> Result
 fn category_rank(category: &str, order: &[String]) -> (usize, String) {
     match order.iter().position(|c| c == category) {
         Some(i) => (i, String::new()),
-        None    => (order.len(), category.to_string()),
+        None => (order.len(), category.to_string()),
     }
 }
 
@@ -242,17 +317,33 @@ trait Selectable {
 }
 
 impl Selectable for &crate::config::schema::CatalogTool {
-    fn key(&self) -> &str { &self.key }
-    fn category(&self) -> &str { &self.category }
-    fn description(&self) -> &str { &self.description }
-    fn default_picked(&self) -> bool { self.default }
+    fn key(&self) -> &str {
+        &self.key
+    }
+    fn category(&self) -> &str {
+        &self.category
+    }
+    fn description(&self) -> &str {
+        &self.description
+    }
+    fn default_picked(&self) -> bool {
+        self.default
+    }
 }
 
 impl Selectable for &crate::config::schema::CatalogPlugin {
-    fn key(&self) -> &str { &self.key }
-    fn category(&self) -> &str { &self.category }
-    fn description(&self) -> &str { &self.description }
-    fn default_picked(&self) -> bool { self.default }
+    fn key(&self) -> &str {
+        &self.key
+    }
+    fn category(&self) -> &str {
+        &self.category
+    }
+    fn description(&self) -> &str {
+        &self.description
+    }
+    fn default_picked(&self) -> bool {
+        self.default
+    }
 }
 
 fn run_grouped_multiselect<T: Selectable>(
@@ -274,17 +365,27 @@ fn run_grouped_multiselect<T: Selectable>(
     let mut chosen: Vec<String> = Vec::new();
     for ((_, _), members) in &groups {
         let category = members[0].category();
-        let key_pad = members.iter().map(|m| m.key().len()).max().unwrap_or(0).max(8);
+        let key_pad = members
+            .iter()
+            .map(|m| m.key().len())
+            .max()
+            .unwrap_or(0)
+            .max(8);
 
-        let initial: Vec<&str> = members.iter()
+        let initial: Vec<&str> = members
+            .iter()
             .filter(|m| {
-                if current_csv_keys.is_empty() { m.default_picked() }
-                else { current_csv_keys.iter().any(|k| k == m.key()) }
+                if current_csv_keys.is_empty() {
+                    m.default_picked()
+                } else {
+                    current_csv_keys.iter().any(|k| k == m.key())
+                }
             })
             .map(|m| m.key())
             .collect();
 
-        let labels: Vec<String> = members.iter()
+        let labels: Vec<String> = members
+            .iter()
             .map(|m| format_item_label(m.key(), m.description(), key_pad))
             .collect();
 
@@ -300,53 +401,71 @@ fn run_grouped_multiselect<T: Selectable>(
 
 fn page_tools(wizard: &WizardDef, catalog: &Catalog, env: &mut EnvFile) -> Result<Nav> {
     let page = page_by_id(wizard, "tools");
-    if !page_should_run(page, env) { return Ok(Nav::Skip); }
+    if !page_should_run(page, env) {
+        return Ok(Nav::Skip);
+    }
 
     let cli = env.get("CODING_CLI").to_string();
     let current_tools = env.keys_csv("INSTALL_TOOLS");
     let order = &catalog.project.category_order;
 
-    let filtered: Vec<&crate::config::schema::CatalogTool> =
-        catalog.tools.iter().filter(|t| t.supports_cli(&cli)).collect();
+    let filtered: Vec<&crate::config::schema::CatalogTool> = catalog
+        .tools
+        .iter()
+        .filter(|t| t.supports_cli(&cli))
+        .collect();
 
     cliclack::log::info(format!("{}  {}", page.title, page.description))?;
     let chosen: Vec<String> = ask!(run_grouped_multiselect(&filtered, order, &current_tools));
-    env.set("INSTALL_TOOLS", &chosen.join(","));
+    env.set("INSTALL_TOOLS", chosen.join(","));
 
     Ok(Nav::Forward)
 }
 
 fn page_plugins(wizard: &WizardDef, catalog: &Catalog, env: &mut EnvFile) -> Result<Nav> {
     let page = page_by_id(wizard, "plugins");
-    if !page_should_run(page, env) { return Ok(Nav::Skip); }
+    if !page_should_run(page, env) {
+        return Ok(Nav::Skip);
+    }
 
     let cli = env.get("CODING_CLI").to_string();
     let current_plugins = env.keys_csv("INSTALL_PLUGINS");
     let order = &catalog.project.category_order;
 
-    let filtered: Vec<&crate::config::schema::CatalogPlugin> =
-        catalog.plugins.iter().filter(|p| p.supports_cli(&cli)).collect();
+    let filtered: Vec<&crate::config::schema::CatalogPlugin> = catalog
+        .plugins
+        .iter()
+        .filter(|p| p.supports_cli(&cli))
+        .collect();
 
     cliclack::log::info(format!("{}  {}", page.title, page.description))?;
     let chosen: Vec<String> = ask!(run_grouped_multiselect(&filtered, order, &current_plugins));
-    env.set("INSTALL_PLUGINS", &chosen.join(","));
+    env.set("INSTALL_PLUGINS", chosen.join(","));
 
     Ok(Nav::Forward)
 }
 
 fn page_custom(wizard: &WizardDef, _catalog: &Catalog, env: &mut EnvFile) -> Result<Nav> {
     let page = page_by_id(wizard, "custom_configs");
-    if !page_should_run(page, env) { return Ok(Nav::Skip); }
+    if !page_should_run(page, env) {
+        return Ok(Nav::Skip);
+    }
 
     for field in &page.fields {
         if field.field_type == FieldType::Path {
             let current = env.get(&field.id).to_string();
-            let placeholder = if current.is_empty() { "blank = built-in default" } else { &current };
-            let val: String = ask!(input(&field.prompt)
-                .placeholder(placeholder)
-                .default_input(&current)
-                .required(field.required)
-                .interact());
+            let placeholder = if current.is_empty() {
+                "blank = built-in default"
+            } else {
+                &current
+            };
+            let val: String = ask!(
+                input(&field.prompt)
+                    .placeholder(placeholder)
+                    .default_input(&current)
+                    .required(field.required)
+                    .interact()
+            );
             env.set(&field.id, &val);
         }
     }
@@ -359,8 +478,14 @@ fn page_custom(wizard: &WizardDef, _catalog: &Catalog, env: &mut EnvFile) -> Res
 type PageFn = fn(&WizardDef, &Catalog, &mut EnvFile) -> Result<Nav>;
 
 const PAGES: &[PageFn] = &[
-    page_cli, page_paths, page_claude, page_keys,
-    page_git, page_tools, page_plugins, page_custom,
+    page_cli,
+    page_paths,
+    page_claude,
+    page_keys,
+    page_git,
+    page_tools,
+    page_plugins,
+    page_custom,
 ];
 
 pub async fn run_wizard(
@@ -377,16 +502,33 @@ pub async fn run_wizard(
     let mut direction: i32 = 1; // remembered direction so condition-failed pages skip in the right way
 
     while (i as usize) < PAGES.len() {
-        if i < 0 { i = 0; direction = 1; continue; }
+        if i < 0 {
+            i = 0;
+            direction = 1;
+            continue;
+        }
 
         match PAGES[i as usize](wizard, catalog, &mut env)? {
-            Nav::Forward => { i += 1; direction = 1; }
-            Nav::Back    => { i -= 1; direction = -1; }
-            Nav::Skip    => { i += direction; }
+            Nav::Forward => {
+                i += 1;
+                direction = 1;
+            }
+            Nav::Back => {
+                i -= 1;
+                direction = -1;
+            }
+            Nav::Skip => {
+                i += direction;
+            }
         }
     }
 
-    outro(catalog.project.outro_template.replace("{binary}", &catalog.project.binary_name))?;
+    outro(
+        catalog
+            .project
+            .outro_template
+            .replace("{binary}", &catalog.project.binary_name),
+    )?;
     Ok(env)
 }
 
@@ -417,7 +559,10 @@ mod tests {
     #[test]
     fn in_list_matches() {
         let env = env_with("CODING_CLI", "aider");
-        assert!(eval_condition("${CODING_CLI} in 'aider,codex,gemini'", &env));
+        assert!(eval_condition(
+            "${CODING_CLI} in 'aider,codex,gemini'",
+            &env
+        ));
         assert!(!eval_condition("${CODING_CLI} in 'claude,opencode'", &env));
     }
 

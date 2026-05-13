@@ -1,7 +1,7 @@
 /// Handler for `gh:<owner/repo>:<asset_glob>` specs.
 /// Downloads the latest GitHub release asset matching the glob, extracts it,
 /// and places any executables in ~/.local/bin.
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 
 use super::run_sh;
@@ -24,9 +24,7 @@ impl Installer for GithubReleaseHandler {
         // Glob → ERE: `*foo*.tar.gz` → `.*foo.*\.tar\.gz`. Quote dots so they
         // don't match arbitrary chars — important for picking the right file
         // when assets share substrings.
-        let regex = pattern
-            .replace('.', r"\.")
-            .replace('*', ".*");
+        let regex = pattern.replace('.', r"\.").replace('*', ".*");
 
         run_sh(&format!(
             r#"

@@ -15,10 +15,18 @@ pub async fn run(rebuild: bool, extra_args: Vec<String>) -> Result<()> {
         if rebuild {
             let _ = Command::new("docker")
                 .args(["rmi", "-f", &cfg.catalog.project.image_tag])
-                .status().await;
+                .status()
+                .await;
         }
         ensure_image(&cfg.catalog.project.image_tag, &cfg.root).await?;
-        start(container, &env, &cfg.catalog.project.image_tag, &cfg.root, extra_args).await
+        start(
+            container,
+            &env,
+            &cfg.catalog.project.image_tag,
+            &cfg.root,
+            extra_args,
+        )
+        .await
     }
 }
 
@@ -63,9 +71,13 @@ async fn image_created_at(tag: &str) -> Result<Option<std::time::SystemTime>> {
         .args(["image", "inspect", "--format", "{{.Created}}", tag])
         .output()
         .await?;
-    if !out.status.success() { return Ok(None); }
+    if !out.status.success() {
+        return Ok(None);
+    }
     let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if s.is_empty() { return Ok(None); }
+    if s.is_empty() {
+        return Ok(None);
+    }
     // RFC 3339 like "2026-05-08T12:34:56.789012345Z" — strip subseconds for
     // the simple parse path; chrono would be cleaner but adding a dep just for
     // this is overkill.
@@ -96,7 +108,9 @@ fn parse_rfc3339(s: &str) -> Option<std::time::SystemTime> {
     };
     let days = days_from_civil(y, mo, d);
     let secs = (days * 86400) + (h * 3600 + mi * 60 + sec) as i64;
-    if secs < 0 { return None; }
+    if secs < 0 {
+        return None;
+    }
     Some(std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs as u64))
 }
 
@@ -105,12 +119,18 @@ fn parse_rfc3339(s: &str) -> Option<std::time::SystemTime> {
 fn latest_source_mtime(root: &std::path::Path) -> std::time::SystemTime {
     let mut max = std::time::UNIX_EPOCH;
     let bump = |p: &std::path::Path, max: &mut std::time::SystemTime| {
-        if let Ok(m) = std::fs::metadata(p).and_then(|m| m.modified()) {
-            if m > *max { *max = m; }
+        if let Ok(m) = std::fs::metadata(p).and_then(|m| m.modified())
+            && m > *max
+        {
+            *max = m;
         }
     };
-    for f in &["Dockerfile", "Cargo.toml", "Cargo.lock",
-              "crates/codetainyrrr/Cargo.toml"] {
+    for f in &[
+        "Dockerfile",
+        "Cargo.toml",
+        "Cargo.lock",
+        "crates/codetainyrrr/Cargo.toml",
+    ] {
         bump(&root.join(f), &mut max);
     }
     walk_max_mtime(&root.join("crates/codetainyrrr/src"), &mut max);
@@ -118,13 +138,17 @@ fn latest_source_mtime(root: &std::path::Path) -> std::time::SystemTime {
 }
 
 fn walk_max_mtime(dir: &std::path::Path, max: &mut std::time::SystemTime) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
             walk_max_mtime(&path, max);
-        } else if let Ok(m) = entry.metadata().and_then(|m| m.modified()) {
-            if m > *max { *max = m; }
+        } else if let Ok(m) = entry.metadata().and_then(|m| m.modified())
+            && m > *max
+        {
+            *max = m;
         }
     }
 }
@@ -133,7 +157,9 @@ fn walk_max_mtime(dir: &std::path::Path, max: &mut std::time::SystemTime) {
 /// false (don't rebuild) if anything is uncertain — better to skip rebuild
 /// than to rebuild on every run.
 async fn image_is_stale(tag: &str, root: &std::path::Path) -> Result<bool> {
-    let Some(created) = image_created_at(tag).await? else { return Ok(false) };
+    let Some(created) = image_created_at(tag).await? else {
+        return Ok(false);
+    };
     let latest = latest_source_mtime(root);
     Ok(latest > created)
 }
@@ -144,8 +170,10 @@ async fn image_is_stale(tag: &str, root: &std::path::Path) -> Result<bool> {
 /// from a registry and fails with "pull access denied".
 async fn ensure_image(tag: &str, root: &std::path::Path) -> Result<()> {
     let exists = image_exists(tag).await?;
-    let stale  = exists && image_is_stale(tag, root).await?;
-    if exists && !stale { return Ok(()); }
+    let stale = exists && image_is_stale(tag, root).await?;
+    if exists && !stale {
+        return Ok(());
+    }
 
     let dockerfile = root.join("Dockerfile");
     if !dockerfile.exists() {
@@ -159,9 +187,15 @@ async fn ensure_image(tag: &str, root: &std::path::Path) -> Result<()> {
         return Ok(()); // image exists, no Dockerfile to rebuild from
     }
     if stale {
-        println!("Image '{tag}' is older than source — rebuilding from {} ...", dockerfile.display());
+        println!(
+            "Image '{tag}' is older than source — rebuilding from {} ...",
+            dockerfile.display()
+        );
     } else {
-        println!("Image '{tag}' not found — building from {} ...", dockerfile.display());
+        println!(
+            "Image '{tag}' not found — building from {} ...",
+            dockerfile.display()
+        );
     }
     let status = Command::new("docker")
         .args(["build", "-t", tag, "."])
@@ -185,37 +219,49 @@ async fn connect_to(container: &str) -> Result<()> {
     Ok(())
 }
 
-async fn start(container: &str, env: &EnvFile, image: &str, root: &std::path::Path, extra_args: Vec<String>) -> Result<()> {
+async fn start(
+    container: &str,
+    env: &EnvFile,
+    image: &str,
+    root: &std::path::Path,
+    extra_args: Vec<String>,
+) -> Result<()> {
     // Docker on Windows accepts `C:/path` mount syntax but chokes on `C:\path`
     // because the `\` ends up adjacent to the bind-mount `:` separator.
     // Normalize unconditionally — POSIX paths are unaffected.
     let project_dir = env.get("PROJECT_DIR").replace('\\', "/");
-    let claude_dir  = env.get("CLAUDE_DIR").replace('\\', "/");
+    let claude_dir = env.get("CLAUDE_DIR").replace('\\', "/");
 
     if project_dir.is_empty() {
         anyhow::bail!("PROJECT_DIR is empty in .env — run `setup` first");
     }
 
     let mut args = vec![
-        "run".to_string(), "--rm".to_string(), "-it".to_string(),
-        "--name".to_string(), container.to_string(),
+        "run".to_string(),
+        "--rm".to_string(),
+        "-it".to_string(),
+        "--name".to_string(),
+        container.to_string(),
         // Hostname inside the container shows up in the shell prompt; matching
         // the container name makes multi-container workflows readable.
-        "--hostname".to_string(), container.to_string(),
+        "--hostname".to_string(),
+        container.to_string(),
         // The container runs as the `dev` user (entrypoint shim drops via
         // gosu). Mount the home volume at /home/dev — mounting at /root left
         // the actual home untouched and installs invisible across restarts.
-        "-v".to_string(), format!("{container}_ct_home:/home/dev"),
-        "-v".to_string(), format!("{project_dir}:/workspace"),
+        "-v".to_string(),
+        format!("{container}_ct_home:/home/dev"),
+        "-v".to_string(),
+        format!("{project_dir}:/workspace"),
     ];
 
     // Bind-mount catalog.json + wizard.json so changes the user makes via
     // setup/reconfigure take effect on the next `run` without rebuilding the
     // image. Falls back to baked-in copies if the host paths are missing.
     let catalog_host = root.join("catalog.json");
-    let wizard_host  = root.join("wizard.json");
-    let catalog_str  = catalog_host.to_string_lossy().replace('\\', "/");
-    let wizard_str   = wizard_host.to_string_lossy().replace('\\', "/");
+    let wizard_host = root.join("wizard.json");
+    let catalog_str = catalog_host.to_string_lossy().replace('\\', "/");
+    let wizard_str = wizard_host.to_string_lossy().replace('\\', "/");
     if catalog_host.exists() {
         args.push("-v".into());
         args.push(format!("{catalog_str}:/etc/codetainyrrr/catalog.json:ro"));
@@ -238,9 +284,12 @@ async fn start(container: &str, env: &EnvFile, image: &str, root: &std::path::Pa
     // process reads from /etc/codetainyrrr/user-*.{json,toml,zsh}. Container
     // edits live in the volume only; the host file is never modified.
     let byo_mounts: &[(&str, &str)] = &[
-        ("CCSTATUSLINE_CONFIG", "/etc/codetainyrrr/user-ccstatusline.json"),
-        ("ZSH_EXTRA_CONFIG",    "/etc/codetainyrrr/user-zshrc-extra.zsh"),
-        ("STARSHIP_CONFIG",     "/etc/codetainyrrr/user-starship.toml"),
+        (
+            "CCSTATUSLINE_CONFIG",
+            "/etc/codetainyrrr/user-ccstatusline.json",
+        ),
+        ("ZSH_EXTRA_CONFIG", "/etc/codetainyrrr/user-zshrc-extra.zsh"),
+        ("STARSHIP_CONFIG", "/etc/codetainyrrr/user-starship.toml"),
     ];
     for (var, target) in byo_mounts {
         let host = env.get(var).replace('\\', "/");
@@ -250,7 +299,12 @@ async fn start(container: &str, env: &EnvFile, image: &str, root: &std::path::Pa
         }
     }
 
-    for key in &["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY"] {
+    for key in &[
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "OPENROUTER_API_KEY",
+        "GEMINI_API_KEY",
+    ] {
         let val = env.get(key);
         if !val.is_empty() {
             args.push("-e".to_string());
@@ -258,8 +312,13 @@ async fn start(container: &str, env: &EnvFile, image: &str, root: &std::path::Pa
         }
     }
 
-    for key in &["CODING_CLI", "INSTALL_TOOLS", "INSTALL_PLUGINS",
-                 "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL"] {
+    for key in &[
+        "CODING_CLI",
+        "INSTALL_TOOLS",
+        "INSTALL_PLUGINS",
+        "GIT_AUTHOR_NAME",
+        "GIT_AUTHOR_EMAIL",
+    ] {
         let val = env.get(key);
         args.push("-e".to_string());
         args.push(format!("{key}={val}"));

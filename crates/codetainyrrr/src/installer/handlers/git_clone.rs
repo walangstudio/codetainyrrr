@@ -1,5 +1,5 @@
 /// Handler for `git:<url>:<install_to>` specs.
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use async_trait::async_trait;
 
 use super::{expand_home, run_sh};
@@ -25,7 +25,8 @@ impl Installer for GitCloneHandler {
             fi
             git clone --depth=1 {url} {dest:?}
             "#
-        )).await
+        ))
+        .await
     }
 
     async fn uninstall(&self, _key: &str, spec: &str) -> Result<()> {
@@ -50,13 +51,15 @@ fn split_url_dest(spec: &str) -> Result<(&str, &str)> {
     let rest = spec.strip_prefix("git:").unwrap_or(spec);
     let mut it = rest.rsplitn(2, ':');
     let dest = it.next().unwrap_or("");
-    let url  = it.next().unwrap_or("");
+    let url = it.next().unwrap_or("");
     let dest_looks_like_path = !dest.starts_with("//")  // "//foo.com/..." = URL remnant
         && (dest.starts_with('/')
             || dest.starts_with('~')
             || dest.starts_with('$'));
     if url.is_empty() || dest.is_empty() || !dest_looks_like_path {
-        bail!("git: spec must be git:<url>:<install_to> where install_to starts with /, ~, or $; got: {spec}");
+        bail!(
+            "git: spec must be git:<url>:<install_to> where install_to starts with /, ~, or $; got: {spec}"
+        );
     }
     Ok((url, dest))
 }
@@ -67,15 +70,16 @@ mod tests {
 
     #[test]
     fn https_url_with_colon_splits_at_last_colon() {
-        let (url, dest) = split_url_dest("git:https://github.com/flutter/flutter.git:$HOME/.flutter").unwrap();
-        assert_eq!(url,  "https://github.com/flutter/flutter.git");
+        let (url, dest) =
+            split_url_dest("git:https://github.com/flutter/flutter.git:$HOME/.flutter").unwrap();
+        assert_eq!(url, "https://github.com/flutter/flutter.git");
         assert_eq!(dest, "$HOME/.flutter");
     }
 
     #[test]
     fn ssh_url_splits_correctly() {
         let (url, dest) = split_url_dest("git:git@github.com:user/repo.git:~/repo").unwrap();
-        assert_eq!(url,  "git@github.com:user/repo.git");
+        assert_eq!(url, "git@github.com:user/repo.git");
         assert_eq!(dest, "~/repo");
     }
 

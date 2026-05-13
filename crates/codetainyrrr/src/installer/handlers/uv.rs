@@ -1,5 +1,5 @@
 use super::run_cmd;
-use crate::installer::{async_trait, InstallStatus, Installer};
+use crate::installer::{InstallStatus, Installer, async_trait};
 use anyhow::Result;
 
 /// Spec formats:
@@ -12,10 +12,10 @@ pub struct UvHandler;
 
 fn parse(spec: &str) -> (&str, Option<&str>) {
     let body = spec.strip_prefix("uv:").unwrap_or(spec);
-    if let Some((pkg, src)) = body.split_once('@') {
-        if src.contains("://") || src.starts_with("git+") {
-            return (pkg, Some(src));
-        }
+    if let Some((pkg, src)) = body.split_once('@')
+        && (src.contains("://") || src.starts_with("git+"))
+    {
+        return (pkg, Some(src));
     }
     (body, None)
 }
@@ -48,7 +48,7 @@ mod tests {
     #[test]
     fn plain_package() {
         assert_eq!(parse("uv:aider-chat"), ("aider-chat", None));
-        assert_eq!(parse("uv:black"),      ("black", None));
+        assert_eq!(parse("uv:black"), ("black", None));
     }
 
     #[test]

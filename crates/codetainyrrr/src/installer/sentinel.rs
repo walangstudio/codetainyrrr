@@ -19,7 +19,10 @@ pub fn set_dir_name(name: &str) {
 }
 
 fn dir_name() -> &'static str {
-    SENTINEL_DIR_NAME.get().map(String::as_str).unwrap_or("codetainyrrr")
+    SENTINEL_DIR_NAME
+        .get()
+        .map(String::as_str)
+        .unwrap_or("codetainyrrr")
 }
 
 fn sentinel_path(kind: &str, key: &str) -> PathBuf {
@@ -51,7 +54,9 @@ pub fn post_install_done(kind: &str, key: &str) -> bool {
 
 pub fn mark_post_install(kind: &str, key: &str) -> Result<()> {
     let p = post_sentinel_path(kind, key);
-    let dir = p.parent().ok_or_else(|| anyhow::anyhow!("post-sentinel path has no parent: {}", p.display()))?;
+    let dir = p
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("post-sentinel path has no parent: {}", p.display()))?;
     std::fs::create_dir_all(dir)?;
     std::fs::write(&p, chrono::Utc::now().to_rfc3339())?;
     Ok(())
@@ -73,7 +78,9 @@ pub fn read(kind: &str, key: &str) -> Option<SentinelData> {
 
 pub fn mark(kind: &str, key: &str, spec: &str, version: Option<String>) -> Result<()> {
     let p = sentinel_path(kind, key);
-    let dir = p.parent().ok_or_else(|| anyhow::anyhow!("sentinel path has no parent: {}", p.display()))?;
+    let dir = p
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("sentinel path has no parent: {}", p.display()))?;
     std::fs::create_dir_all(dir)?;
     let data = SentinelData {
         version,
@@ -104,7 +111,12 @@ pub fn list_kind(kind: &str) -> Vec<String> {
         .max_depth(1)
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map(|x| x == "installed").unwrap_or(false))
+        .filter(|e| {
+            e.path()
+                .extension()
+                .map(|x| x == "installed")
+                .unwrap_or(false)
+        })
         .filter_map(|e| {
             e.path()
                 .file_stem()

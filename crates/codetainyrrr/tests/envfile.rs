@@ -13,8 +13,10 @@ fn windows_path_round_trips_without_escape_explosion() {
     let raw = std::fs::read_to_string(f.path()).unwrap();
     // Single backslash, no doubling — value has no space/quote so writer
     // emits it unquoted.
-    assert!(raw.contains(r"PROJECT_DIR=c:\temp"),
-        "expected single-backslash path in file, got:\n{raw}");
+    assert!(
+        raw.contains(r"PROJECT_DIR=c:\temp"),
+        "expected single-backslash path in file, got:\n{raw}"
+    );
 
     let loaded = EnvFile::load(f.path()).unwrap();
     assert_eq!(loaded.get("PROJECT_DIR"), r"c:\temp");
@@ -132,7 +134,10 @@ fn write_quotes_values_with_spaces() {
     env.write(tmp.path(), "").unwrap();
 
     let content = std::fs::read_to_string(tmp.path()).unwrap();
-    assert!(content.contains(r#"NAME="John Doe""#), "expected quoted value, got: {content}");
+    assert!(
+        content.contains(r#"NAME="John Doe""#),
+        "expected quoted value, got: {content}"
+    );
 }
 
 #[test]

@@ -6,7 +6,10 @@ use anyhow::{Context, Result};
 use std::collections::HashSet;
 
 use crate::config::Catalog;
-use crate::installer::{registry::{self, Kind}, sentinel};
+use crate::installer::{
+    registry::{self, Kind},
+    sentinel,
+};
 
 /// What we know about a catalog entry, regardless of which list it came from.
 struct Entry<'a> {
@@ -19,13 +22,31 @@ struct Entry<'a> {
 
 fn lookup<'a>(catalog: &'a Catalog, key: &str) -> Option<Entry<'a>> {
     if let Some(c) = catalog.clis.iter().find(|c| c.key == key) {
-        return Some(Entry { kind: Kind::Cli, key: &c.key, spec: Some(&c.install), deps: &c.dependencies, post_install: &c.post_install });
+        return Some(Entry {
+            kind: Kind::Cli,
+            key: &c.key,
+            spec: Some(&c.install),
+            deps: &c.dependencies,
+            post_install: &c.post_install,
+        });
     }
     if let Some(t) = catalog.tools.iter().find(|t| t.key == key) {
-        return Some(Entry { kind: Kind::Tool, key: &t.key, spec: t.install.as_deref(), deps: &t.dependencies, post_install: &t.post_install });
+        return Some(Entry {
+            kind: Kind::Tool,
+            key: &t.key,
+            spec: t.install.as_deref(),
+            deps: &t.dependencies,
+            post_install: &t.post_install,
+        });
     }
     if let Some(p) = catalog.plugins.iter().find(|p| p.key == key) {
-        return Some(Entry { kind: Kind::Plugin, key: &p.key, spec: p.install.as_deref(), deps: &p.dependencies, post_install: &p.post_install });
+        return Some(Entry {
+            kind: Kind::Plugin,
+            key: &p.key,
+            spec: p.install.as_deref(),
+            deps: &p.dependencies,
+            post_install: &p.post_install,
+        });
     }
     None
 }
@@ -42,12 +63,13 @@ pub async fn install_with_deps(
         return Ok(());
     }
 
-    let entry = lookup(catalog, key)
-        .with_context(|| format!("dependency '{key}' not found in catalog"))?;
+    let entry =
+        lookup(catalog, key).with_context(|| format!("dependency '{key}' not found in catalog"))?;
 
     // Install dependencies first. Boxed because async + recursion needs Pin<Box<...>>.
     for dep in entry.deps {
-        Box::pin(install_with_deps(catalog, dep, visited)).await
+        Box::pin(install_with_deps(catalog, dep, visited))
+            .await
             .with_context(|| format!("installing dep '{dep}' of '{key}'"))?;
     }
 
@@ -65,7 +87,8 @@ pub async fn install_with_deps(
     let kind_str = entry_kind_str(&entry.kind);
     if !entry.post_install.is_empty() && !sentinel::post_install_done(kind_str, entry.key) {
         for cmd in entry.post_install {
-            run_post_install(entry.key, cmd).await
+            run_post_install(entry.key, cmd)
+                .await
                 .with_context(|| format!("post_install of '{}': {cmd}", entry.key))?;
         }
         sentinel::mark_post_install(kind_str, entry.key)?;
@@ -82,7 +105,7 @@ pub async fn install_with_deps(
 #[derive(Debug, Default)]
 pub struct InstallSummary {
     pub completed: Vec<String>,
-    pub failed:    Vec<(String, String)>,
+    pub failed: Vec<(String, String)>,
 }
 
 /// Install a list of keys, resolving each one's dependencies. Used by the
@@ -104,8 +127,8 @@ pub async fn install_many(catalog: &Catalog, keys: &[String]) -> InstallSummary 
 
 fn entry_kind_str(kind: &Kind) -> &'static str {
     match kind {
-        Kind::Cli    => "cli",
-        Kind::Tool   => "tools",
+        Kind::Cli => "cli",
+        Kind::Tool => "tools",
         Kind::Plugin => "plugins",
     }
 }
@@ -131,14 +154,19 @@ mod tests {
     fn empty() -> Catalog {
         Catalog {
             project: ProjectMeta::default(),
-            clis: vec![], tools: vec![], plugins: vec![],
+            clis: vec![],
+            tools: vec![],
+            plugins: vec![],
         }
     }
 
     fn tool(key: &str, install: Option<&str>, deps: &[&str], post: &[&str]) -> CatalogTool {
         CatalogTool {
-            key: key.into(), name: None, category: "test".into(),
-            default: false, supported_clis: vec!["*".into()],
+            key: key.into(),
+            name: None,
+            category: "test".into(),
+            default: false,
+            supported_clis: vec!["*".into()],
             description: String::new(),
             install: install.map(String::from),
             dependencies: deps.iter().map(|s| s.to_string()).collect(),
@@ -150,18 +178,27 @@ mod tests {
     fn lookup_finds_entries_across_kinds() {
         let mut c = empty();
         c.clis.push(CatalogCli {
-            key: "x".into(), name: "X".into(), description: "".into(),
-            needs_keys: vec![], oauth_supported: false,
-            bin: "x".into(), install: "npm:x".into(),
-            dependencies: vec![], post_install: vec![],
+            key: "x".into(),
+            name: "X".into(),
+            description: "".into(),
+            needs_keys: vec![],
+            oauth_supported: false,
+            bin: "x".into(),
+            install: "npm:x".into(),
+            dependencies: vec![],
+            post_install: vec![],
         });
         c.tools.push(tool("y", Some("npm:y"), &[], &[]));
         c.plugins.push(CatalogPlugin {
-            key: "z".into(), name: None, category: "".into(),
-            default: false, supported_clis: vec!["*".into()],
+            key: "z".into(),
+            name: None,
+            category: "".into(),
+            default: false,
+            supported_clis: vec!["*".into()],
             description: "".into(),
             install: Some("npm:z".into()),
-            dependencies: vec![], post_install: vec![],
+            dependencies: vec![],
+            post_install: vec![],
         });
         assert!(lookup(&c, "x").is_some());
         assert!(lookup(&c, "y").is_some());
@@ -179,6 +216,9 @@ mod tests {
         let err = rt.block_on(install_with_deps(&c, "ghost", &mut visited));
         assert!(err.is_err());
         let msg = format!("{:?}", err.unwrap_err());
-        assert!(msg.contains("ghost"), "error should mention missing key, got: {msg}");
+        assert!(
+            msg.contains("ghost"),
+            "error should mention missing key, got: {msg}"
+        );
     }
 }

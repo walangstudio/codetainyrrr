@@ -71,15 +71,33 @@ impl Default for ProjectMeta {
     }
 }
 
-fn default_name()        -> String { "codetainyrrr".into() }
-fn default_about()       -> String { "AI coding container — setup, run, manage".into() }
-fn default_image_tag()   -> String { "codetainyrrr:latest".into() }
-fn default_ready_file()  -> String { "/tmp/codetainyrrr.ready".into() }
-fn default_etc_dir()     -> String { "/etc/codetainyrrr".into() }
-fn default_env_header()  -> String { "# codetainyrrr configuration".into() }
-fn default_intro()       -> String { "  codetainyrrr  ·  setup  ".into() }
-fn default_outro()       -> String { "Configuration complete. Run '{binary} run' to start your container.".into() }
-fn default_default_cli() -> String { "claude".into() }
+fn default_name() -> String {
+    "codetainyrrr".into()
+}
+fn default_about() -> String {
+    "AI coding container — setup, run, manage".into()
+}
+fn default_image_tag() -> String {
+    "codetainyrrr:latest".into()
+}
+fn default_ready_file() -> String {
+    "/tmp/codetainyrrr.ready".into()
+}
+fn default_etc_dir() -> String {
+    "/etc/codetainyrrr".into()
+}
+fn default_env_header() -> String {
+    "# codetainyrrr configuration".into()
+}
+fn default_intro() -> String {
+    "  codetainyrrr  ·  setup  ".into()
+}
+fn default_outro() -> String {
+    "Configuration complete. Run '{binary} run' to start your container.".into()
+}
+fn default_default_cli() -> String {
+    "claude".into()
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CatalogCli {
@@ -205,7 +223,9 @@ pub struct WizardField {
     pub condition: Option<String>,
 }
 
-fn default_required() -> bool { true }
+fn default_required() -> bool {
+    true
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]

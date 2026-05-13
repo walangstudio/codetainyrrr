@@ -13,14 +13,18 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use codetainyrrr::config::{loader, Catalog};
+use codetainyrrr::config::{Catalog, loader};
 
 fn project_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("..")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
 }
 
 fn load_real_catalog() -> Catalog {
-    loader::load(&project_root()).expect("load real catalog").catalog
+    loader::load(&project_root())
+        .expect("load real catalog")
+        .catalog
 }
 
 /// Returns (key, install_spec, dependencies) for every catalog entry, regardless of kind.
@@ -45,9 +49,15 @@ fn all_entries(catalog: &Catalog) -> Vec<(String, String, Vec<String>)> {
 /// What runtime does this install spec require? Returned as the dependency-key
 /// the entry must list (transitively or directly) for the install to succeed.
 fn required_runtime(spec: &str) -> Option<&'static str> {
-    if spec.starts_with("npm:")            { return Some("node"); }
-    if spec.starts_with("corepack:")       { return Some("node"); }
-    if spec.starts_with("uv:")             { return Some("uv"); }
+    if spec.starts_with("npm:") {
+        return Some("node");
+    }
+    if spec.starts_with("corepack:") {
+        return Some("node");
+    }
+    if spec.starts_with("uv:") {
+        return Some("uv");
+    }
     // merge-json's command is shell — heuristic: if it invokes npx, it needs node.
     if spec.starts_with("merge-json:") && spec.contains("npx ") {
         return Some("node");
@@ -58,13 +68,10 @@ fn required_runtime(spec: &str) -> Option<&'static str> {
 /// Mirror of `installer::orchestrator::install_with_deps` minus the actual
 /// installs. Records the order keys would be processed in.
 fn simulate_order(catalog: &Catalog, keys: &[&str]) -> Vec<String> {
-    fn walk(
-        catalog: &Catalog,
-        key: &str,
-        visited: &mut HashSet<String>,
-        order: &mut Vec<String>,
-    ) {
-        if !visited.insert(key.to_string()) { return; }
+    fn walk(catalog: &Catalog, key: &str, visited: &mut HashSet<String>, order: &mut Vec<String>) {
+        if !visited.insert(key.to_string()) {
+            return;
+        }
         let deps = lookup_deps(catalog, key)
             .unwrap_or_else(|| panic!("dependency '{key}' not found in catalog"));
         for dep in &deps {
@@ -102,13 +109,15 @@ fn every_runtime_dependent_entry_declares_its_runtime() {
     let mut failures = vec![];
 
     for (key, spec, _deps) in all_entries(&catalog) {
-        let Some(needed) = required_runtime(&spec) else { continue };
+        let Some(needed) = required_runtime(&spec) else {
+            continue;
+        };
 
         // Simulate install: starts with `key`. Confirm `needed` appears
         // earlier in the order — i.e. it's a transitive dep.
         let order = simulate_order(&catalog, &[key.as_str()]);
         let needed_idx = order.iter().position(|k| k == needed);
-        let key_idx    = order.iter().position(|k| k == &key).unwrap();
+        let key_idx = order.iter().position(|k| k == &key).unwrap();
 
         match needed_idx {
             Some(i) if i < key_idx => {} // good — needed installs first
@@ -122,7 +131,11 @@ fn every_runtime_dependent_entry_declares_its_runtime() {
         }
     }
 
-    assert!(failures.is_empty(), "catalog dependency gaps:\n  - {}", failures.join("\n  - "));
+    assert!(
+        failures.is_empty(),
+        "catalog dependency gaps:\n  - {}",
+        failures.join("\n  - ")
+    );
 }
 
 // ── Concrete topological scenarios ───────────────────────────────────────────
@@ -141,8 +154,8 @@ fn selecting_ts_and_ccusage_installs_node_once() {
     let node_count = order.iter().filter(|k| *k == "node").count();
     assert_eq!(node_count, 1, "node should appear exactly once: {order:?}");
     let node_pos = order.iter().position(|k| k == "node").unwrap();
-    let ts_pos   = order.iter().position(|k| k == "ts").unwrap();
-    let ccu_pos  = order.iter().position(|k| k == "ccusage").unwrap();
+    let ts_pos = order.iter().position(|k| k == "ts").unwrap();
+    let ccu_pos = order.iter().position(|k| k == "ccusage").unwrap();
     assert!(node_pos < ts_pos);
     assert!(node_pos < ccu_pos);
 }
@@ -171,8 +184,20 @@ fn full_default_set_resolves_cleanly() {
     // Mimic the most common entrypoint: claude (CLI) + default tools + default plugins.
     let catalog = load_real_catalog();
     let mut keys = vec!["claude"];
-    keys.extend(catalog.tools.iter().filter(|t| t.default).map(|t| t.key.as_str()));
-    keys.extend(catalog.plugins.iter().filter(|p| p.default).map(|p| p.key.as_str()));
+    keys.extend(
+        catalog
+            .tools
+            .iter()
+            .filter(|t| t.default)
+            .map(|t| t.key.as_str()),
+    );
+    keys.extend(
+        catalog
+            .plugins
+            .iter()
+            .filter(|p| p.default)
+            .map(|p| p.key.as_str()),
+    );
 
     let order = simulate_order(&catalog, &keys);
     // node must come before any npm/corepack/npx-using entry that's in the order.
@@ -203,7 +228,10 @@ fn no_cycles_in_dependency_graph() {
 #[test]
 fn every_dependency_resolves_to_a_known_key() {
     let catalog = load_real_catalog();
-    let known: HashSet<String> = catalog.clis.iter().map(|c| c.key.clone())
+    let known: HashSet<String> = catalog
+        .clis
+        .iter()
+        .map(|c| c.key.clone())
         .chain(catalog.tools.iter().map(|t| t.key.clone()))
         .chain(catalog.plugins.iter().map(|p| p.key.clone()))
         .collect();
