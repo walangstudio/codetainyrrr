@@ -1,4 +1,5 @@
 pub mod handlers;
+pub mod orchestrator;
 pub mod registry;
 pub mod sentinel;
 

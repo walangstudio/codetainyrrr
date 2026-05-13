@@ -22,6 +22,7 @@ impl Installer for MergeJsonHandler {
 
         let output = tokio::process::Command::new("bash")
             .args(["-c", cmd])
+            .env("PATH", super::enriched_path())
             .output()
             .await
             .with_context(|| format!("failed to run: {cmd}"))?;

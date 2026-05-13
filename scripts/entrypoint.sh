@@ -19,5 +19,24 @@ if [ "$(id -u)" = "0" ]; then
     exec gosu "${_uid}:${_gid}" "$0" "$@"
 fi
 
+# Apply BYO config overrides once per home volume. If the user provided host
+# paths in .env (CCSTATUSLINE_CONFIG / ZSH_EXTRA_CONFIG / STARSHIP_CONFIG), run.rs
+# bind-mounts each to a staging path under /etc/codetainyrrr/. Copy those into
+# the home volume here — guarded by a marker file so user edits inside the
+# container survive subsequent starts.
+_byo_mark="$HOME/.config/codetainyrrr-byo-applied"
+if [ ! -f "$_byo_mark" ]; then
+    [ -f /etc/codetainyrrr/user-ccstatusline.json ] && \
+        mkdir -p "$HOME/.config/ccstatusline" && \
+        cp /etc/codetainyrrr/user-ccstatusline.json "$HOME/.config/ccstatusline/settings.json"
+    [ -f /etc/codetainyrrr/user-starship.toml ] && \
+        mkdir -p "$HOME/.config" && \
+        cp /etc/codetainyrrr/user-starship.toml "$HOME/.config/starship.toml"
+    [ -f /etc/codetainyrrr/user-zshrc-extra.zsh ] && \
+        mkdir -p "$HOME/.config/zsh" && \
+        cp /etc/codetainyrrr/user-zshrc-extra.zsh "$HOME/.config/zsh/extra.zsh"
+    mkdir -p "$(dirname "$_byo_mark")" && touch "$_byo_mark"
+fi
+
 # Running as dev user — hand off to the Rust binary.
 exec /usr/local/bin/codetainyrrr entrypoint "$@"

@@ -14,7 +14,7 @@
 ///   merge-json:<path>:<cmd>             → MergeJsonHandler
 ///   marketplace:<repo>:<plugin>[:<mkt>] → MarketplaceHandler
 ///   curl -fsSL <url> | bash             → ShellPipeHandler
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 
 use super::handlers::{
     apt::AptHandler,
@@ -34,6 +34,7 @@ use super::handlers::{
 use super::{InstallStatus, Installer};
 use crate::installer::sentinel;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Cli,
     Tool,
@@ -55,7 +56,8 @@ pub async fn install(kind: Kind, key: &str, spec: &str) -> Result<()> {
         return Ok(());
     }
     let handler = handler_for(spec)?;
-    handler.install(key, spec).await?;
+    handler.install(key, spec).await
+        .with_context(|| format!("installing {} '{}' (spec: {})", kind.as_str(), key, spec))?;
     sentinel::mark(kind.as_str(), key, spec, None)?;
     Ok(())
 }
@@ -64,6 +66,7 @@ pub async fn uninstall(kind: Kind, key: &str, spec: &str) -> Result<()> {
     let handler = handler_for(spec)?;
     handler.uninstall(key, spec).await?;
     sentinel::remove(kind.as_str(), key)?;
+    sentinel::remove_post(kind.as_str(), key)?;
     Ok(())
 }
 

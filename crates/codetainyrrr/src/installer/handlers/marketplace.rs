@@ -19,8 +19,18 @@ fn parse_spec(spec: &str) -> Result<(String, String, String)> {
 
 #[async_trait]
 impl Installer for MarketplaceHandler {
-    async fn install(&self, _key: &str, spec: &str) -> Result<()> {
+    async fn install(&self, key: &str, spec: &str) -> Result<()> {
         let (repo, plugin, mkt) = parse_spec(spec)?;
+        // Marketplace plugins live inside Claude Code. If user picked a different
+        // CLI and somehow still landed here (manual env edit), fail with a
+        // clear single-line error instead of letting `claude` ENOENT bubble up
+        // mid-install.
+        if super::resolve_in_path("claude", &super::enriched_path()).is_none() {
+            bail!(
+                "plugin '{key}' is a Claude Code marketplace plugin but `claude` is not installed. \
+                Set CODING_CLI=claude or remove '{key}' from INSTALL_PLUGINS."
+            );
+        }
         // claude plugin marketplace add <owner/repo>
         run_cmd("claude", &["plugin", "marketplace", "add", &repo]).await?;
         // claude plugin install <plugin>@<mkt-name>

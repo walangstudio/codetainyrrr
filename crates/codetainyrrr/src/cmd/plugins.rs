@@ -2,6 +2,7 @@ use anyhow::{bail, Result};
 
 use crate::config::loader;
 use crate::envfile::EnvFile;
+use crate::installer::orchestrator;
 use crate::installer::registry::{self, Kind};
 use crate::installer::sentinel;
 
@@ -27,17 +28,18 @@ pub async fn add(key: String) -> Result<()> {
         bail!("plugin '{key}' does not support CLI '{cli}'");
     }
 
-    let spec = plugin.install.as_deref()
-        .ok_or_else(|| anyhow::anyhow!("plugin '{key}' has no install spec"))?;
-
-    registry::install(Kind::Plugin, &key, spec).await?;
+    // Orchestrator pulls in dependencies and runs post_install steps.
+    let summary = orchestrator::install_many(&cfg.catalog, &[key.clone()]).await;
+    if let Some((k, err)) = summary.failed.into_iter().next() {
+        bail!("installing '{k}' failed: {err}");
+    }
 
     // Update INSTALL_PLUGINS in .env
     let mut plugins = env.keys_csv("INSTALL_PLUGINS");
     if !plugins.contains(&key) {
         plugins.push(key.clone());
         env.set("INSTALL_PLUGINS", &plugins.join(","));
-        env.write(&env_path, "# codetainyrrr configuration")?;
+        env.write(&env_path, &cfg.catalog.project.env_header)?;
     }
 
     println!("Plugin '{key}' installed.");
@@ -65,7 +67,7 @@ pub async fn remove(key: String) -> Result<()> {
     let mut plugins = env.keys_csv("INSTALL_PLUGINS");
     plugins.retain(|p| p != &key);
     env.set("INSTALL_PLUGINS", &plugins.join(","));
-    env.write(&env_path, "# codetainyrrr configuration")?;
+    env.write(&env_path, &cfg.catalog.project.env_header)?;
 
     println!("Plugin '{key}' removed.");
     Ok(())

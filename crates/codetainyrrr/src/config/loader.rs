@@ -49,15 +49,22 @@ fn merge_by_key<T, F: Fn(&T) -> String>(base: &mut Vec<T>, user: Vec<T>, key_fn:
 }
 
 fn load_wizard(root: &Path) -> Result<WizardDef> {
-    // Check container path first (when running as entrypoint)
-    let paths = [root.join("wizard.json"), PathBuf::from("/etc/codetainyrrr/wizard.json")];
-    for p in &paths {
+    let local = root.join("wizard.json");
+    if local.exists() {
+        return serde_json::from_str(
+            &std::fs::read_to_string(&local).with_context(|| format!("reading {}", local.display()))?,
+        )
+        .context("parsing wizard.json");
+    }
+    // Last-resort fallbacks for known container layouts.
+    for fallback in ["/etc/codetainyrrr/wizard.json"] {
+        let p = PathBuf::from(fallback);
         if p.exists() {
             return serde_json::from_str(
-                &std::fs::read_to_string(p).with_context(|| format!("reading {}", p.display()))?,
+                &std::fs::read_to_string(&p).with_context(|| format!("reading {}", p.display()))?,
             )
             .context("parsing wizard.json");
         }
     }
-    anyhow::bail!("wizard.json not found in {} or /etc/codetainyrrr/", root.display())
+    anyhow::bail!("wizard.json not found in {}", root.display())
 }

@@ -29,9 +29,22 @@ impl EnvFile {
             if let Some((k, v)) = line.split_once('=') {
                 let k = k.trim().to_string();
                 let v = v.trim();
-                // Strip inline comments and surrounding double-quotes
-                let v = v.splitn(2, " #").next().unwrap_or(v).trim();
-                let v = v.trim_matches('"').to_string();
+                let was_quoted = v.starts_with('"') && v.ends_with('"') && v.len() >= 2;
+                // Strip inline comments only on unquoted values — `"# notes"` is data.
+                let v = if was_quoted { v } else { v.splitn(2, " #").next().unwrap_or(v).trim() };
+                // Strip exactly one leading and trailing `"` if present.
+                // (trim_matches would gobble all of them, breaking escaped closing quotes.)
+                let v = if was_quoted { &v[1..v.len() - 1] } else { v };
+                // Unescape only when the value was quoted. Two-pass with a
+                // sentinel so `\\"` decodes as `\"` (literal backslash + quote)
+                // rather than `"` (which a naive replace order would produce).
+                let v = if was_quoted {
+                    v.replace(r"\\", "\x00")
+                     .replace(r#"\""#, "\"")
+                     .replace('\x00', "\\")
+                } else {
+                    v.to_string()
+                };
                 values.insert(k, v);
             }
         }
@@ -66,8 +79,12 @@ impl EnvFile {
         for (k, v) in &self.values {
             if v.is_empty() {
                 out.push_str(&format!("{k}=\n"));
-            } else if v.contains(' ') || v.contains('"') || v.contains('\\') {
-                let escaped = v.replace('\\', r"\\").replace('"', r#"\""#);
+            } else if v.contains(' ') || v.contains('"') || v.contains('#') {
+                // Quote and escape literal `"`. Backslashes are *not* escaped —
+                // Windows paths like `c:\temp` round-trip as themselves. The
+                // parser only treats `\"` and `\\` as escape sequences, so
+                // raw backslashes inside quotes survive intact.
+                let escaped = v.replace('"', r#"\""#);
                 out.push_str(&format!("{k}=\"{escaped}\"\n"));
             } else {
                 out.push_str(&format!("{k}={v}\n"));

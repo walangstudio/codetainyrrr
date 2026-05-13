@@ -14,6 +14,10 @@ impl Installer for AptHandler {
             .unwrap_or(spec)
             .split_whitespace()
             .collect();
+        // The Dockerfile strips /var/lib/apt/lists to keep the image small, so
+        // any runtime apt:* spec must refresh the index first — otherwise every
+        // package looks "missing" and the install bails with exit 100.
+        apt_get(&["update"], &[]).await?;
         apt_get(&["install", "-y"], &packages).await
     }
 

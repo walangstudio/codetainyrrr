@@ -29,8 +29,7 @@ pub async fn run(cli: String) -> Result<()> {
     }
 
     env.set("CODING_CLI", &cli);
-    let header = "# codetainyrrr configuration";
-    env.write(&env_path, header)?;
+    env.write(&env_path, &cfg.catalog.project.env_header)?;
     println!("Switched to {cli}. Restart the container to apply.");
     Ok(())
 }

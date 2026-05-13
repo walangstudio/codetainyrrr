@@ -3,7 +3,7 @@
 .env*
 !env.example
 
-# User-local catalog additions — gitignored, mount into container via run.sh/run.ps1
+# User-local catalog additions — gitignored, mounted into container by `codetainyrrr run`
 catalog.user.json
 
 # Default project mount (your code lives here, not the container's)

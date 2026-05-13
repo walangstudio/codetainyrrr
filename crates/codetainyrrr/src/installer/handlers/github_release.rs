@@ -21,26 +21,59 @@ impl Installer for GithubReleaseHandler {
         let repo = parts[0];
         let pattern = parts[1];
 
+        // Glob → ERE: `*foo*.tar.gz` → `.*foo.*\.tar\.gz`. Quote dots so they
+        // don't match arbitrary chars — important for picking the right file
+        // when assets share substrings.
+        let regex = pattern
+            .replace('.', r"\.")
+            .replace('*', ".*");
+
         run_sh(&format!(
             r#"
-            set -euo pipefail
+            set -uo pipefail
             REPO="{repo}"
-            PATTERN="{pattern}"
+            PATTERN_RE="{regex}"
             DEST="$HOME/.local/bin"
             mkdir -p "$DEST"
 
             API_URL="https://api.github.com/repos/${{REPO}}/releases/latest"
-            ASSET_URL=$(curl -fsSL "$API_URL" \
-                | grep '"browser_download_url"' \
-                | grep -o 'https://[^"]*' \
-                | grep -E "${{PATTERN//\*/.*}}" \
+
+            # Auth header if a token's available (raises rate limit 60→5000/hr).
+            AUTH_ARGS=()
+            if [ -n "${{GITHUB_TOKEN:-}}" ]; then
+                AUTH_ARGS=(-H "Authorization: Bearer $GITHUB_TOKEN")
+            fi
+
+            RESP=$(curl -fsSL "${{AUTH_ARGS[@]}}" "$API_URL" 2>&1) || {{
+                echo "github-release: failed to fetch $API_URL" >&2
+                echo "$RESP" | head -5 >&2
+                exit 1
+            }}
+
+            # Detect rate-limit / error responses up front so the user sees a clear cause.
+            if echo "$RESP" | jq -e '.message' >/dev/null 2>&1; then
+                MSG=$(echo "$RESP" | jq -r '.message')
+                echo "github-release: API returned error: $MSG" >&2
+                exit 1
+            fi
+
+            # -i so 'Linux' / 'linux' both work — case is a frequent source of
+            # silent miss when copy-pasting glob patterns.
+            ASSET_URL=$(echo "$RESP" \
+                | jq -r '.assets[].browser_download_url' \
+                | grep -iE "$PATTERN_RE" \
                 | head -1)
 
-            [ -z "$ASSET_URL" ] && echo "No asset matching $PATTERN in $REPO" && exit 1
+            if [ -z "$ASSET_URL" ]; then
+                echo "github-release: no asset matching '/$PATTERN_RE/' (case-insensitive) in $REPO. Available:" >&2
+                echo "$RESP" | jq -r '.assets[].name' | head -20 >&2
+                exit 1
+            fi
 
+            echo "github-release: downloading $ASSET_URL" >&2
             TMPDIR=$(mktemp -d)
             FILENAME=$(basename "$ASSET_URL")
-            curl -fsSL "$ASSET_URL" -o "$TMPDIR/$FILENAME"
+            curl -fsSL "${{AUTH_ARGS[@]}}" "$ASSET_URL" -o "$TMPDIR/$FILENAME"
 
             case "$FILENAME" in
                 *.tar.gz|*.tgz) tar -C "$TMPDIR" -xzf "$TMPDIR/$FILENAME" ;;
@@ -49,10 +82,14 @@ impl Installer for GithubReleaseHandler {
                 *)              chmod +x "$TMPDIR/$FILENAME" ;;
             esac
 
-            find "$TMPDIR" -maxdepth 2 -type f -executable ! -name "*.sh" \
+            # Some tarballs ship binaries without the executable bit set (e.g.,
+            # lazygit). Mark anything that's a known binary by name pattern.
+            find "$TMPDIR" -maxdepth 2 -type f \
+                ! -name "*.tar*" ! -name "*.zip" ! -name "*.md" ! -name "*.txt" \
+                ! -name "LICENSE*" ! -name "*.json" ! -name "*.sh" \
                 | while read -r bin; do
-                    cp "$bin" "$DEST/$(basename $bin)"
-                    chmod +x "$DEST/$(basename $bin)"
+                    chmod +x "$bin" 2>/dev/null || true
+                    cp "$bin" "$DEST/$(basename "$bin")"
                 done
 
             rm -rf "$TMPDIR"
