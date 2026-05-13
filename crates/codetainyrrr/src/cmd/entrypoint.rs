@@ -1,52 +1,41 @@
-/// Container entrypoint: reads INSTALL_TOOLS / INSTALL_PLUGINS / CODING_CLI from env,
-/// installs each via the registry (idempotent via sentinels), then execs zsh.
+/// Container entrypoint: reads INSTALL_TOOLS / INSTALL_PLUGINS / CODING_CLI from env
+/// and routes everything through the orchestrator so dependencies and
+/// post_install hooks declared in catalog.json run automatically.
 use anyhow::Result;
-use indicatif::{ProgressBar, ProgressStyle};
 use std::time::Duration;
 
 use crate::config::loader;
-use crate::installer::registry::{self, Kind};
+use crate::installer::orchestrator;
 
 pub async fn run(_reconcile: bool, daemon: bool) -> Result<()> {
     let root = crate::config::locate_root();
     let cfg = loader::load(&root)?;
 
-    let coding_cli      = std::env::var("CODING_CLI").unwrap_or_else(|_| "claude".to_string());
+    // Tools install into well-known directories under $HOME, but the entrypoint
+    // process doesn't source ~/.zshrc, so freshly-installed binaries aren't on
+    // PATH for the next handler in the same run. Prepend the known dirs once.
+    prepend_known_paths();
+
+    let coding_cli      = std::env::var("CODING_CLI").unwrap_or_else(|_| cfg.catalog.project.default_cli.clone());
     let install_tools   = std::env::var("INSTALL_TOOLS").unwrap_or_default();
     let install_plugins = std::env::var("INSTALL_PLUGINS").unwrap_or_default();
 
-    // Install CLI
-    if let Some(cli_entry) = cfg.catalog.clis.iter().find(|c| c.key == coding_cli) {
-        install_one("cli", &cli_entry.key, &cli_entry.install, Kind::Cli).await?;
+    // Build a single ordered list: CLI, then tools, then plugins. The
+    // orchestrator handles dependencies declared on each entry, so user-facing
+    // order only needs to express priority for sibling entries.
+    let mut keys: Vec<String> = Vec::new();
+    if cfg.catalog.clis.iter().any(|c| c.key == coding_cli) {
+        keys.push(coding_cli.clone());
     }
+    keys.extend(install_tools.split(',').map(str::trim).filter(|s| !s.is_empty()).map(String::from));
+    keys.extend(install_plugins.split(',').map(str::trim).filter(|s| !s.is_empty()).map(String::from));
 
-    // Install tools
-    let tool_keys: Vec<&str> = install_tools.split(',').map(str::trim).filter(|s| !s.is_empty()).collect();
-    for key in &tool_keys {
-        if let Some(tool) = cfg.catalog.tools.iter().find(|t| t.key.as_str() == *key) {
-            if let Some(spec) = &tool.install {
-                install_one("tool", key, spec, Kind::Tool).await?;
-            } else {
-                eprintln!("warn: tool '{key}' has no install spec in catalog — skipping");
-            }
-        } else {
-            eprintln!("warn: tool '{key}' not found in catalog — skipping");
-        }
-    }
-
-    // Install plugins
-    let plugin_keys: Vec<&str> = install_plugins.split(',').map(str::trim).filter(|s| !s.is_empty()).collect();
-    for key in &plugin_keys {
-        if let Some(plugin) = cfg.catalog.plugins.iter().find(|p| p.key.as_str() == *key) {
-            if let Some(spec) = &plugin.install {
-                install_one("plugin", key, spec, Kind::Plugin).await?;
-            }
-        }
-    }
+    let summary = orchestrator::install_many(&cfg.catalog, &keys).await;
+    print_summary_banner(&summary);
 
     if daemon {
         // Write ready file and sleep forever
-        let _ = std::fs::write("/tmp/codetainyrrr.ready", "1");
+        let _ = std::fs::write(&cfg.catalog.project.ready_file, "1");
         loop {
             tokio::time::sleep(Duration::from_secs(3600)).await;
         }
@@ -63,8 +52,79 @@ pub async fn run(_reconcile: bool, daemon: bool) -> Result<()> {
     anyhow::bail!("entrypoint is only supported on Linux/macOS")
 }
 
-async fn install_one(kind_label: &str, key: &str, spec: &str, kind: Kind) -> Result<()> {
+/// Add common installer destination directories to PATH so subsequent handlers
+/// in the same orchestrator run can invoke just-installed binaries (claude,
+/// node via nvm, sdkman tools, deno, bun, dotnet, cargo, etc.).
+fn prepend_known_paths() {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/home/dev".to_string());
+    let nvm_node_bin = glob_first_dir(&format!("{home}/.nvm/versions/node/*/bin"));
+
+    let extras: Vec<String> = [
+        Some(format!("{home}/.local/bin")),
+        Some(format!("{home}/.cargo/bin")),
+        Some(format!("{home}/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin")),
+        Some(format!("{home}/.deno/bin")),
+        Some(format!("{home}/.bun/bin")),
+        Some(format!("{home}/.dotnet")),
+        Some(format!("{home}/go/sdk/bin")),
+        Some(format!("{home}/.sdkman/candidates/java/current/bin")),
+        nvm_node_bin,
+    ].into_iter().flatten().collect();
+
+    let current = std::env::var("PATH").unwrap_or_default();
+    let new_path = format!("{}:{current}", extras.join(":"));
+    // SAFETY: single-threaded at this point, before any handler spawns.
+    unsafe { std::env::set_var("PATH", new_path); }
+}
+
+/// End-of-run banner. Always prints completed count; if anything failed,
+/// surfaces each failure with the first line of its error and a one-line
+/// retry hint. Going silent here would leave users wondering why `doctor`
+/// shows half their picks missing.
+fn print_summary_banner(summary: &crate::installer::orchestrator::InstallSummary) {
+    use console::style;
+
+    let n_ok   = summary.completed.len();
+    let n_fail = summary.failed.len();
+
+    println!();
+    println!("  {}", style(format!("── Install summary: {n_ok} ok, {n_fail} failed ──")).bold());
+
+    if !summary.failed.is_empty() {
+        println!();
+        println!("  {}", style("FAILED:").red().bold());
+        for (key, err) in &summary.failed {
+            // First line of the error chain — usually the root cause.
+            let first = err.lines().next().unwrap_or("(no error message)");
+            println!("    {} {}", style("✗").red(), style(key).red().bold());
+            println!("      {}", style(first).dim());
+        }
+        println!();
+        println!(
+            "  {} Edit `.env` to drop these from INSTALL_TOOLS / INSTALL_PLUGINS,",
+            style("→").yellow()
+        );
+        println!(
+            "    or run `codetainyrrr reconfigure` to retry / pick different ones."
+        );
+        println!();
+    }
+}
+
+fn glob_first_dir(pattern: &str) -> Option<String> {
+    glob::glob(pattern).ok()?
+        .filter_map(|e| e.ok())
+        .find(|p| p.is_dir())
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
+// Spinner support kept here in case future installer paths want it; the
+// orchestrator currently logs through cliclack.
+#[allow(dead_code)]
+async fn _install_one_with_spinner(kind_label: &str, key: &str, spec: &str, kind: crate::installer::registry::Kind) -> Result<()> {
+    use crate::installer::registry;
     use crate::installer::sentinel;
+    use indicatif::{ProgressBar, ProgressStyle};
     if sentinel::is_installed(kind.as_str(), key) {
         return Ok(());
     }

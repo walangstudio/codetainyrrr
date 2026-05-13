@@ -96,6 +96,14 @@ RUN mkdir -p \
 # Bake .zshrc into the image so connecting immediately gets a proper shell
 COPY --chown=${USERNAME}:${USERNAME} scripts/zshrc /home/${USERNAME}/.zshrc
 
+# Bake the project's default user-editable configs into the dev user's home.
+# Volume init copies these into the container's home volume on first mount, so
+# the user gets a sensible starting config and can edit it inside the container.
+# These ship with the project — they do NOT bind-mount or read from the host.
+COPY --chown=${USERNAME}:${USERNAME} scripts/ccstatusline-default.json /home/${USERNAME}/.config/ccstatusline/settings.json
+COPY --chown=${USERNAME}:${USERNAME} scripts/starship-default.toml      /home/${USERNAME}/.config/starship.toml
+COPY --chown=${USERNAME}:${USERNAME} scripts/zshrc-extra-default.zsh    /home/${USERNAME}/.config/zsh/extra.zsh
+
 USER root
 
 WORKDIR /workspace

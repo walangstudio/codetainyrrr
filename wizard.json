@@ -24,20 +24,22 @@
       "title": "Claude Settings",
       "description": "Share project memories with Claude Desktop?",
       "hint": "Yes — projects/ and todos/ sync with your host Claude Desktop. No — fully isolated.",
+      "condition": "${CODING_CLI} == 'claude'",
       "fields": [
-        { "id": "CLAUDE_DIR",   "type": "path", "prompt": "Path to your Claude config dir:", "default": "" },
-        { "id": "CLAUDE_JSON",  "type": "path", "prompt": "Path to your claude.json file:",  "default": "" }
+        { "id": "CLAUDE_DIR",   "type": "path", "prompt": "Path to your Claude config dir:", "default": "", "required": false },
+        { "id": "CLAUDE_JSON",  "type": "path", "prompt": "Path to your claude.json file:",  "default": "", "required": false }
       ]
     },
     {
       "id": "api_keys",
       "title": "API Keys",
       "description": "Keys are stored only in your local .env — never sent anywhere.",
+      "auto_keys": true,
       "fields": [
-        { "id": "ANTHROPIC_API_KEY",   "type": "secret", "prompt": "Anthropic API key (or leave blank):",   "hint": "Leave blank if you log in via claude.ai" },
-        { "id": "OPENAI_API_KEY",      "type": "secret", "prompt": "OpenAI API key (or leave blank):",      "default": "" },
-        { "id": "OPENROUTER_API_KEY",  "type": "secret", "prompt": "OpenRouter API key (or leave blank):",  "default": "" },
-        { "id": "GEMINI_API_KEY",      "type": "secret", "prompt": "Gemini API key (or leave blank):",      "default": "" }
+        { "id": "ANTHROPIC_API_KEY",   "type": "secret", "prompt": "Anthropic API key:",   "hint": "blank = keep existing or use OAuth login", "required": false },
+        { "id": "OPENAI_API_KEY",      "type": "secret", "prompt": "OpenAI API key:",      "default": "", "required": false },
+        { "id": "OPENROUTER_API_KEY",  "type": "secret", "prompt": "OpenRouter API key:",  "default": "", "required": false },
+        { "id": "GEMINI_API_KEY",      "type": "secret", "prompt": "Gemini API key:",      "default": "", "required": false }
       ]
     },
     {
@@ -60,7 +62,7 @@
     {
       "id": "plugins",
       "title": "Plugins  (optional)",
-      "description": "Installed once, sentineled. Add/remove later: ./run.sh plugins add/remove <name>",
+      "description": "Installed once, sentineled. Add/remove later: codetainyrrr plugins add/remove <name>",
       "fields": [
         { "id": "INSTALL_PLUGINS", "type": "multiselect", "source": "catalog.plugins" }
       ]
@@ -68,12 +70,12 @@
     {
       "id": "custom_configs",
       "title": "Custom Configs  (optional)",
-      "description": "Point to files on your host — mounted read-only into the container.",
-      "hint": "Leave blank to use built-in defaults.",
+      "description": "Point to files on your host to seed your container's editable copies. Blank = use the project's baked defaults.",
+      "hint": "Files are copied into the container on first start, then edited inside the container only. Your host files are never touched after that.",
       "fields": [
-        { "id": "CCSTATUSLINE_CONFIG", "type": "path", "prompt": "ccstatusline settings.json path (blank = use built-in):", "default": "" },
-        { "id": "ZSH_EXTRA_CONFIG",    "type": "path", "prompt": "Extra zsh config to source at shell start (blank = none):", "default": "" },
-        { "id": "STARSHIP_CONFIG",     "type": "path", "prompt": "starship.toml path (blank = use built-in):", "default": "" }
+        { "id": "CCSTATUSLINE_CONFIG", "type": "path", "prompt": "ccstatusline settings.json path (blank = built-in default):", "default": "", "required": false },
+        { "id": "ZSH_EXTRA_CONFIG",    "type": "path", "prompt": "Extra zsh config to source at shell start (blank = built-in default):", "default": "", "required": false },
+        { "id": "STARSHIP_CONFIG",     "type": "path", "prompt": "starship.toml path (blank = built-in default):", "default": "", "required": false }
       ]
     }
   ]

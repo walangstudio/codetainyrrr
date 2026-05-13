@@ -19,6 +19,17 @@ impl Installer for PythonHandler {
             fi
             export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
             {tool_installs}
+
+            # Debian only ships python3 — every script that does `#!/usr/bin/env python`
+            # is broken without this. Symlink instead of installing python-is-python3
+            # (apt) so we don't need sudo for it.
+            mkdir -p "$HOME/.local/bin"
+            if ! command -v python >/dev/null 2>&1; then
+                ln -sf "$(command -v python3)" "$HOME/.local/bin/python"
+            fi
+            if ! command -v pip >/dev/null 2>&1 && command -v pip3 >/dev/null 2>&1; then
+                ln -sf "$(command -v pip3)" "$HOME/.local/bin/pip"
+            fi
             "#,
             tool_installs = PYTHON_TOOLS
                 .iter()

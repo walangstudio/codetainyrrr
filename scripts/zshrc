@@ -55,7 +55,7 @@ if [ "${NO_AUTOLAUNCH:-0}" = "0" ] && [ -z "$_CT_LAUNCHED" ]; then
     printf '  \033[1mPlugins\033[0m : %s\n'     "${INSTALL_PLUGINS:-none}"
     printf '  \033[2m─────────────────────────────────────────────\033[0m\n'
     printf '  \033[1mWorkspace\033[0m : %s\n'   "${PWD}"
-    printf '  \033[2mSkip auto-launch: NO_AUTOLAUNCH=1 ./run.sh connect\033[0m\n'
+    printf '  \033[2mSkip auto-launch: NO_AUTOLAUNCH=1 codetainyrrr connect\033[0m\n'
     printf '\n'
     _launch_cli() {
         if [ "$_cli" = "claude" ]; then

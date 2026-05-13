@@ -6,31 +6,112 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-07
+
+Full Rust rewrite. Replaces the bash + PowerShell wizard, run, and reset
+scripts with a single cross-platform `codetainyrrr` binary that drives every
+step on host and inside the container. The binary is project-agnostic — drop
+it into any repo with a `catalog.json` + `wizard.json` and it rebrands itself
+via the `[project]` block.
+
 ### Added
 
-- **Node ecosystem tools**: `node`, `pnpm`, `yarn` added to `INSTALL_TOOLS`. Node LTS via NVM; pnpm and yarn via corepack.
-- **TUI multi-select wizard**: Setup scripts now use an interactive checkbox picker (arrow keys + space to toggle) instead of typing comma-separated lists. Falls back to numbered-toggle input when running without a TTY.
-- **Default-ticked tools**: `rtk`, `node`, and `ts` are pre-selected on fresh install. Users can untick if not needed. All tools have short descriptions.
-
-### Added
-
-- **Wizard navigation tests**: `test-setup.sh` and `test-setup.ps1` drive the setup wizards non-interactively via piped stdin and assert `.env` output. Covers forward path, step-back navigation, back-in-secret-prompt safety, and forward-back-forward idempotency. Run with `./test.sh --wizard --skip-build`.
+- **Single Rust binary** with subcommands `setup`, `reconfigure`, `run`,
+  `stop`, `connect`, `switch`, `plugins {add,remove,list}`, `reset`, `doctor`,
+  `entrypoint`. `config` is an alias of `setup`. Every subcommand exposes
+  `--help`.
+- **`[project]` block in `catalog.json`** (name, binary_name, image_tag,
+  container_name_default, ready_file, etc_dir, env_header, intro/outro
+  templates, default_cli) — branding and paths are all data-driven, no
+  hardcoded "codetainyrrr" strings remain in the runtime code paths.
+- **`--config-root <DIR>` global flag** + `CODETAINYRRR_CONFIG_ROOT` env var
+  point the binary at a different project's catalog/wizard so the same
+  executable can drive any project.
+- **Config-driven wizard pages**: `condition` (skips a page when
+  `${VAR} == 'value'` / `!=` / `in 'a,b,c'` evaluates false), `auto_keys`
+  (generates secret prompts from the selected CLI's `needs_keys` instead of
+  asking for every provider), and per-field `required` (allows blank input
+  for OAuth-based CLIs).
+- **Esc → Back navigation**: pressing Esc at any prompt — input, password,
+  select, multiselect, confirm — rewinds to the previous page. Hidden pages
+  are skipped both directions. Replaces the bash wizard's `back` sentinel.
+- **Orchestrator with `dependencies` and `post_install`**: every catalog
+  entry can declare other catalog keys it requires and shell commands to run
+  after install. Resolved topologically, idempotent via sentinel files. Net
+  effect: pick a tool, the orchestrator pulls in everything it needs and runs
+  any per-project init step automatically.
+- **`--rebuild` flag on `run`** forces a fresh image build. Use after
+  upgrading the binary; not needed for catalog edits.
+- **Bind-mounted `catalog.json` + `wizard.json`** at runtime — config edits
+  via `setup` take effect on the next `run` without an image rebuild. Image
+  retains baked copies as fallback.
+- **`enriched_path()` for handlers**: every install handler enriches `PATH`
+  at spawn time (re-resolves `~/.nvm/versions/node/*/bin`, `~/.local/bin`,
+  `~/.cargo/bin`, `~/.deno/bin`, `~/.bun/bin`, `~/.dotnet`, `~/go/sdk/bin`,
+  SDKMan), so a binary installed by an earlier handler is reachable by the
+  next one in the same orchestrator pass.
+- **Catalog entries**: GitHub `spec-kit` (uv-tool from git) and `ruflo`
+  (Claude marketplace plugin + auto `npx ruvflo init` post-install).
+- **`uv:<package>@<git+url>` install spec** translates to
+  `uv tool install <package> --from <url>`.
+- **Cross-platform e2e tests**: `tests/e2e_help.rs` (every subcommand
+  responds to --help), `tests/e2e_alt_project.rs` (binary reads an alt
+  project's catalog and shows its items, not codetainyrrr's),
+  `tests/e2e_wizard.rs` (config plumbing + ProjectMeta defaults), and
+  `tests/e2e_docker.rs` gated on `CT_E2E_DOCKER=1`. 49 tests total.
+- **Setup wizard themed via `cliclack` + `NeonTheme`** (violet/cyan).
+  Filter-mode (search-as-you-type) on tool/plugin multiselects. Items
+  rendered with key + description on the same line, sorted by category.
 
 ### Changed
 
-- **RTK now optional**: RTK (token-optimized proxy for ls/grep/git) moved from auto-install to INSTALL_TOOLS. Default-selected but can be unticked.
-- **CLI menu rejects free-text**: The CLI picker now only accepts numbered input, preventing typos like `claudee` from being accepted.
-- **Privacy-respecting defaults**: Setup no longer reads `git config --global` for name/email or suggests host paths like `$HOME/projects/myproject` or `$HOME/.claude`. Only `.env` values are used as defaults; otherwise fields are blank. Paths must be explicitly entered.
-- **ccstatusline optional**: `WIRE_CCSTATUSLINE` env var (default `true`) controls whether the status bar is wired into Claude Code. Set `false` in `.env` or toggle during `setup.sh` / `setup.ps1` to skip.
-- **setup.sh back navigation**: The wizard now runs in a step loop (matching `setup.ps1`). Typing `back` or pressing ESC at any prompt returns to the previous step instead of requiring a full restart.
+- **Catalog stays JSON, not TOML**: original plan called for TOML migration;
+  kept JSON to preserve existing user catalogs and `catalog.user.json`
+  override semantics (entries merge by key, user wins).
+- **Plugin handlers consolidated**: `ccstatusline-wire` collapsed into
+  generic `merge-json:<path>:<cmd>`; `claude-marketplace` renamed
+  `marketplace`. `WIRE_CCSTATUSLINE` env var removed.
+- **`.env` writer no longer escapes backslashes**, only literal `"`. Parser
+  strips exactly one leading/trailing quote and unescapes only `\"`/`\\`
+  inside quoted values. Windows paths like `c:\temp` round-trip cleanly.
+- **Docker mount paths** normalized to forward slashes in `cmd/run.rs` so
+  `c:\temp:/workspace` no longer collides with bind-mount syntax on Windows
+  hosts.
+- **Image build is automatic** when missing on first `run`; no separate
+  `--build` step needed.
 
 ### Fixed
 
-- **Variable preservation on back**: `ask`, `yn`, `menu`, and `tui_multiselect` in `setup.sh` no longer wipe the variable to empty when the user types `back` — the previous value is retained so going back then forward keeps defaults intact. Same fix applied to `setup.ps1`.
-- **Secret prompt back navigation**: `ask_secret` (`setup.sh`) and `AskSecret` (`setup.ps1`) now detect `back`/`b`/`\` typed at a masked prompt, set the GoBack flag, and return without storing the literal word as an API key.
-- **API key preservation on back**: When the user accepted "replace existing key?" then typed `back` at the key prompt, the original key was incorrectly cleared. The new-key value is now only committed if GoBack is not set.
-- **TUI multi-select back support**: `_typed_multiselect_render` in `setup.sh` and `Show-MultiSelectFallback` in `setup.ps1` now exit cleanly on `back`/`b`/`\` input without overwriting the selection variable.
-- **`WIZARD_NO_TUI=1` flag**: Forces both scripts to use the typed (non-ANSI) multi-select fallback, enabling fully non-interactive piped-stdin testing.
+- **`.env` backslash escape explosion**: round-trips through the legacy
+  parser doubled backslashes each save (`c:\temp` → `c:\\temp` →
+  `c:\\\\temp`). Parser now unescapes correctly; legacy quad-escaped values
+  are normalized on first load.
+- **PATH not refreshed mid-install**: handlers running after an installer
+  could not find newly-installed binaries (claude in `~/.local/bin`, npx
+  under `~/.nvm/versions/node/*/bin`). Each handler now enriches PATH at
+  spawn time.
+- **Anthropic API key forced as required**: now honors `required: false` so
+  blank input is accepted (browser OAuth path).
+- **Claude settings page asked for non-claude CLIs**: gated by
+  `condition: "${CODING_CLI} == 'claude'"` in `wizard.json`.
+
+### Removed
+
+- All legacy bash + PowerShell scripts: `setup.sh`, `setup.ps1`, `run.sh`,
+  `run.ps1`, `reset.sh`, `reset.ps1`, `test-setup.sh`, `test-setup.ps1`,
+  `test.sh`. The `codetainyrrr` binary replaces them. `scripts/entrypoint.sh`
+  remains as a 24-line privilege-drop shim before exec'ing the binary.
+- `INSTALL_CPP` / `INSTALL_PHP` / `INSTALL_RUBY` build args (cpp/php/ruby
+  installs are runtime apt now).
+
+### Deferred
+
+- Multi-platform release CI (GitHub Actions) and signed binaries.
+- `install.stage = "image"` for tools that genuinely need image-time apt.
+- `tarball` generic handler with `version_url` + `url_template` (Go uses a
+  dedicated handler today).
+- Additional cliclack themes beyond `neon`.
+- `doctor --dry-run` and `needs-update` status detection per handler.
 
 ## [0.1.0] - 2026-04-27
 
@@ -65,5 +146,6 @@ First release. Captures the full surface of `codetainyrrr` as a sandboxed AI-cod
 - Image base: Debian Bookworm Slim with zsh, git, Python 3.11, NVM, RTK, jq, curl/wget, zip.
 - Security: `cap_drop: ALL`, `no-new-privileges:true`, container can only see the mounted workspace and your `~/.claude` if you opted in.
 
-[Unreleased]: https://github.com/your-org/codetainyrrr/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/your-org/codetainyrrr/releases/tag/v0.1.0
+[Unreleased]: https://github.com/ntancardoso/codetainyrrr/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ntancardoso/codetainyrrr/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/ntancardoso/codetainyrrr/releases/tag/v0.1.0

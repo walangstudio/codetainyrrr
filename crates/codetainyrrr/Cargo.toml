@@ -1,6 +1,6 @@
 [package]
 name = "codetainyrrr"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "AI coding container — setup, run, manage"
 license = "MIT"
@@ -59,6 +59,7 @@ thiserror = "1"
 dirs     = "5"
 walkdir  = "2"
 tempfile = "3"
+glob     = "0.3"
 
 # Serialization helpers
 indexmap = { version = "2", features = ["serde"] }

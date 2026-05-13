@@ -3,6 +3,52 @@ use codetainyrrr::envfile::EnvFile;
 use tempfile::NamedTempFile;
 
 #[test]
+fn windows_path_round_trips_without_escape_explosion() {
+    let mut env = EnvFile::default();
+    env.set("PROJECT_DIR", r"c:\temp");
+
+    let f = NamedTempFile::new().unwrap();
+    env.write(f.path(), "# header").unwrap();
+
+    let raw = std::fs::read_to_string(f.path()).unwrap();
+    // Single backslash, no doubling — value has no space/quote so writer
+    // emits it unquoted.
+    assert!(raw.contains(r"PROJECT_DIR=c:\temp"),
+        "expected single-backslash path in file, got:\n{raw}");
+
+    let loaded = EnvFile::load(f.path()).unwrap();
+    assert_eq!(loaded.get("PROJECT_DIR"), r"c:\temp");
+
+    // Re-write and re-load: must remain stable, not grow extra escapes.
+    let f2 = NamedTempFile::new().unwrap();
+    loaded.write(f2.path(), "# header").unwrap();
+    let raw2 = std::fs::read_to_string(f2.path()).unwrap();
+    assert_eq!(raw, raw2, "round-trip should be byte-stable");
+}
+
+#[test]
+fn quotes_inside_quoted_values_are_escaped_and_unescaped() {
+    let mut env = EnvFile::default();
+    env.set("MSG", r#"hello "world""#);
+
+    let f = NamedTempFile::new().unwrap();
+    env.write(f.path(), "# h").unwrap();
+
+    let loaded = EnvFile::load(f.path()).unwrap();
+    assert_eq!(loaded.get("MSG"), r#"hello "world""#);
+}
+
+#[test]
+fn legacy_double_escaped_path_is_unescaped_on_load() {
+    // Files written by older versions of this code had backslashes doubled.
+    // Loading them today should give the original path back, so re-saving
+    // produces a clean single-backslash file.
+    let raw = "PROJECT_DIR=\"c:\\\\temp\"\n";
+    let env = EnvFile::parse(raw);
+    assert_eq!(env.get("PROJECT_DIR"), r"c:\temp");
+}
+
+#[test]
 fn parses_simple_key_value() {
     let env = EnvFile::parse("FOO=bar\nBAZ=qux\n");
     assert_eq!(env.get("FOO"), "bar");
