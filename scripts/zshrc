@@ -67,13 +67,17 @@ if [ "${NO_AUTOLAUNCH:-0}" = "0" ] && [ -z "$_CT_LAUNCHED" ]; then
     if command -v "$_cli" &>/dev/null; then
         _launch_cli
     else
-        printf '  \033[2mWaiting for entrypoint to install %s' "$_cli"
+        # Max seconds to wait for the entrypoint to finish installing the CLI.
+        # Default 1800 (30m) — a slow link can take ~25m+ for claude's ~240MB
+        # binary. Override with CT_LAUNCH_WAIT_SECS (e.g. 0 to skip waiting).
+        _ct_max="${CT_LAUNCH_WAIT_SECS:-1800}"
+        printf '  \033[2mWaiting for entrypoint to install %s (up to %ss)' "$_cli" "$_ct_max"
         _ct_wait=0
-        while ! command -v "$_cli" &>/dev/null && [ $_ct_wait -lt 120 ]; do
+        while ! command -v "$_cli" &>/dev/null && [ "$_ct_wait" -lt "$_ct_max" ]; do
             printf '.'
             sleep 3
             hash -r 2>/dev/null
-            _ct_wait=$((_ct_wait + 1))
+            _ct_wait=$((_ct_wait + 3))
         done
         printf '\033[0m\n\n'
         if command -v "$_cli" &>/dev/null; then

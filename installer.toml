@@ -1,0 +1,843 @@
+# codetainyrrr installer.toml — config-driven by the insmaller engine.
+#
+# settings, desugar, recipe, and plugin blocks are VERBATIM from the sibling
+# insmaller/installer.toml (parity guarantee). Task pipelines port the Docker
+# lifecycle from crates/codetainyrrr/src/cmd/*.rs and docker-compose.yml.
+
+# ── settings ──────────────────────────────────────────────────────────────────
+
+[settings]
+sentinel_dir_name = "codetainyrrr"
+# setup only collects config + writes setup_output; it never installs on the
+# host. The catalog's install scripts are Linux/container scripts run by the
+# container entrypoint (INSTALL_TOOLS/INSTALL_PLUGINS), never on the host shell.
+# (insmaller >=0.4.0)
+setup_writes_config_only = true
+path_globs = [
+  "~/.local/bin",
+  "~/.cargo/bin",
+  "~/.deno/bin",
+  "~/.bun/bin",
+  "~/.dotnet",
+  "~/go/sdk/bin",
+  "~/.sdkman/candidates/java/current/bin",
+  "~/.nvm/versions/node/*/bin",
+]
+
+catalog = "catalog.json"
+wizard  = "wizard.toml"
+
+[settings.setup_output]
+path   = "~/.codetainyrrr/.env"
+format = "env"
+header = "codetainyrrr configuration"
+mode   = 0o600
+
+# ── project ───────────────────────────────────────────────────────────────────
+
+[project]
+name             = "codetainyrrr"
+about            = "AI coding container — setup, run, manage"
+default_cli      = "claude"
+group_order      = [
+  "Coding Tools",
+  "Frameworks",
+  "Shell Tools",
+  "Coding CLI Plugins",
+  "SDD / Orchestration",
+  "Memory & Knowledge",
+]
+intro_template   = "  codetainyrrr  ·  setup  "
+outro_template   = "Configuration complete. Run 'codetainyrrr task run' to start your container."
+
+[project.extra]
+image_tag        = "codetainyrrr:local"
+container_name   = "codetainyrrr"
+ready_file       = "/tmp/codetainyrrr.ready"
+etc_dir          = "/etc/codetainyrrr"
+env_header       = "# codetainyrrr configuration"
+home_volume      = "codetainyrrr_ct_home"
+
+# ── desugar ───────────────────────────────────────────────────────────────────
+# VERBATIM from insmaller/installer.toml
+
+[[desugar]]
+prefix = "npm:"
+recipe = "npm-global"
+parse  = "rest_verbatim"
+
+[[desugar]]
+prefix = "apt:"
+recipe = "apt-get"
+parse  = "rest_verbatim"
+
+[[desugar]]
+prefix = "uv:"
+recipe = "uv-tool"
+parse  = "uv_spec"
+
+[[desugar]]
+prefix = "nvm:"
+recipe = "nvm-node"
+parse  = "nvm_version"
+
+[[desugar]]
+prefix = "sdkman:"
+recipe = "sdkman-candidate"
+parse  = "single_arg"
+
+[[desugar]]
+prefix = "corepack:"
+recipe = "corepack-prepare"
+parse  = "single_arg"
+
+[[desugar]]
+prefix = "go:"
+recipe = "go-toolchain"
+parse  = "single_arg"
+
+[[desugar]]
+prefix = "python:"
+recipe = "python-tools"
+parse  = "single_arg"
+
+[[desugar]]
+prefix = "gh:"
+recipe = "gh-release"
+parse  = "gh_repo_asset"
+
+[[desugar]]
+prefix = "git:"
+recipe = "git-clone"
+parse  = "git_url_dest"
+
+[[desugar]]
+prefix = "merge-json:"
+recipe = "merge-json"
+parse  = "merge_json_spec"
+
+[[desugar]]
+prefix = "marketplace:"
+recipe = "marketplace"
+parse  = "marketplace_spec"
+
+[[desugar]]
+prefix = ""
+recipe = "shell-pipe"
+parse  = "shell_literal"
+
+# ── recipes ───────────────────────────────────────────────────────────────────
+# VERBATIM from insmaller/installer.toml
+
+[[recipe]]
+name = "npm-global"
+[[recipe.install]]
+type    = "exec"
+program = "npm"
+argline = "install -g {{ packages }}"
+[[recipe.uninstall]]
+type    = "exec"
+program = "npm"
+argline = "uninstall -g {{ packages }}"
+
+[[recipe]]
+name = "apt-get"
+[[recipe.install]]
+type   = "shell"
+script = "sudo DEBIAN_FRONTEND=noninteractive apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y {{ packages }}"
+[[recipe.uninstall]]
+type   = "shell"
+script = "sudo apt-get remove -y {{ packages }}"
+
+[[recipe]]
+name = "uv-tool"
+[[recipe.install]]
+type    = "exec"
+program = "uv"
+argline = "tool install {{ package }}{% if from %} --from {{ from }}{% endif %}"
+[[recipe.uninstall]]
+type    = "exec"
+program = "uv"
+argline = "tool uninstall {{ package }}"
+
+[[recipe]]
+name = "nvm-node"
+[[recipe.install]]
+type   = "shell"
+script = """
+set -e
+export NVM_DIR="$HOME/.nvm"
+if [ ! -f "$NVM_DIR/nvm.sh" ]; then
+    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+fi
+. "$NVM_DIR/nvm.sh"
+nvm install {{ install_arg }}
+nvm alias default '{{ alias_target }}'
+nvm use default
+node --version
+npm --version
+"""
+[[recipe.uninstall]]
+type   = "shell"
+script = """
+export NVM_DIR="$HOME/.nvm"
+[ -f "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && nvm uninstall '{{ alias_target }}' || true
+"""
+
+[[recipe]]
+name = "sdkman-candidate"
+[[recipe.install]]
+type   = "shell"
+script = """
+set -e
+export SDKMAN_DIR="$HOME/.sdkman"
+if [ ! -f "$SDKMAN_DIR/bin/sdkman-init.sh" ]; then
+    curl -fsSL https://get.sdkman.io | bash
+fi
+. "$SDKMAN_DIR/bin/sdkman-init.sh"
+sdk install {{ arg }}
+"""
+
+[[recipe]]
+name = "corepack-prepare"
+[[recipe.install]]
+type    = "exec"
+program = "corepack"
+argline = "prepare {{ arg }}@latest --activate"
+
+[[recipe]]
+name = "go-toolchain"
+[[recipe.install]]
+type        = "shell"
+script_file = "recipes/go-toolchain.sh"
+
+[[recipe]]
+name = "python-tools"
+[[recipe.install]]
+type        = "shell"
+script_file = "recipes/python-tools.sh"
+[[recipe.uninstall]]
+type        = "shell"
+script_file = "recipes/python-tools-uninstall.sh"
+
+[[recipe]]
+name = "gh-release"
+[[recipe.install]]
+type        = "shell"
+script_file = "recipes/gh-release.sh"
+[[recipe.uninstall]]
+type   = "shell"
+script = 'rm -f "$HOME/.local/bin/{{ key }}"'
+
+[[recipe]]
+name = "git-clone"
+[[recipe.install]]
+type   = "shell"
+script = """
+if [ -d "{{ dest }}/.git" ]; then
+    echo "git-clone: {{ dest }} already a git checkout, skipping" >&2
+    exit 0
+fi
+git clone --depth=1 {{ url }} "{{ dest }}"
+"""
+[[recipe.uninstall]]
+type   = "shell"
+script = 'rm -rf "{{ dest }}"'
+
+[[recipe]]
+name = "merge-json"
+[[recipe.install]]
+type    = "merge_json"
+target  = "{{ target }}"
+command = "{{ command }}"
+
+[[recipe]]
+name = "marketplace"
+[[recipe.install]]
+type      = "check_command"
+program   = "claude"
+on_missing = "plugin '{{ plugin }}' is a Claude Code marketplace plugin but 'claude' is not installed. Set CODING_CLI=claude or remove it."
+[[recipe.install]]
+type    = "exec"
+program = "claude"
+argline = "plugin marketplace add {{ repo }}"
+[[recipe.install]]
+type    = "exec"
+program = "claude"
+argline = "plugin install {{ plugin }}@{{ marketplace }}"
+[[recipe.uninstall]]
+type    = "exec"
+program = "claude"
+argline = "plugin uninstall {{ plugin }}"
+
+[[recipe]]
+name = "shell-pipe"
+[[recipe.install]]
+type   = "shell"
+script = "{{ script }}"
+
+# ── recipe-pack plugins ───────────────────────────────────────────────────────
+# VERBATIM from insmaller/installer.toml
+
+[[plugin]]
+name = "sys-pkg"
+path = "plugins/sys-pkg"
+
+[[plugin]]
+name = "lang-pkg"
+path = "plugins/lang-pkg"
+
+# ── tasks ─────────────────────────────────────────────────────────────────────
+# Port of crates/codetainyrrr/src/cmd/{run,reset,doctor}.rs and docker-compose.yml.
+#
+# Variable contract:
+#   minijinja ({{ }}) — ONLY [project.extra] keys that are always defined:
+#     image_tag, container_name, ready_file, etc_dir, env_header
+#   shell runtime — ALL wizard-derived values sourced from ~/.codetainyrrr/.env:
+#     CODING_CLI, CONTAINER_NAME, PROJECT_DIR, EXTRA_WORKSPACES,
+#     CLAUDE_DIR, CLAUDE_JSON, GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL,
+#     INSTALL_TOOLS, INSTALL_PLUGINS, CCSTATUSLINE_CONFIG,
+#     ZSH_EXTRA_CONFIG, STARSHIP_CONFIG,
+#     ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY
+#
+# Every task script that needs wizard vars sources the env file first:
+#   set -a; [ -f "${HOME}/.codetainyrrr/.env" ] && . "${HOME}/.codetainyrrr/.env"; set +a
+#
+# CONTAINER_NAME: prefer the user's .env value, fall back to project.extra default:
+#   "${CONTAINER_NAME:-{{ container_name }}}"
+#
+# Per-OS overrides only where the invocation genuinely differs
+# (Windows path quoting for volume specs).
+
+# ── task.build ────────────────────────────────────────────────────────────────
+# "build" = ensure the image is present. Installed users have no Dockerfile/
+# context — the image ships prebuilt as codetainyrrr-image.tar.gz beside the
+# config (copied into the install dir by the installer's stage-payload). So:
+# inspect the image; if absent, `docker load` the bundled tarball. The image is
+# produced once by CI (release.yml `image` job via `docker build` + `docker save`).
+# task.run `needs = ["build"]`, so the load happens transparently on first run.
+
+[task.build]
+description = "Ensure the codetainyrrr image is loaded (loads the bundled tarball if missing)"
+
+[[task.build.steps]]
+type   = "shell"
+script = """
+if docker image inspect {{ image_tag }} >/dev/null 2>&1; then
+    exit 0
+fi
+IMG="{{ exe_dir | default('') }}/codetainyrrr-image.tar.gz"
+if [ -f "$IMG" ]; then
+    echo "Loading image {{ image_tag }} from $IMG ..."
+    docker load -i "$IMG"
+else
+    echo "Image {{ image_tag }} not loaded and no tarball at $IMG." >&2
+    echo "Re-run 'codetainyrrr task install' from the extracted bundle." >&2
+    exit 1
+fi
+"""
+
+[[task.build.os.windows]]
+type   = "shell"
+script = """
+$body = @'
+if docker image inspect {{ image_tag }} >/dev/null 2>&1; then
+    exit 0
+fi
+IMG="$(printf '%s' "{{ exe_dir | default('') }}" | tr '\\\\' '/')/codetainyrrr-image.tar.gz"
+if [ -f "$IMG" ]; then
+    echo "Loading image {{ image_tag }} from $IMG ..."
+    docker load -i "$IMG"
+else
+    echo "Image {{ image_tag }} not loaded and no tarball at $IMG." >&2
+    echo "Re-run 'codetainyrrr task install' from the extracted bundle." >&2
+    exit 1
+fi
+'@
+$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString() + ".sh")
+[System.IO.File]::WriteAllText($tmp, $body)
+# Stop MSYS/Git-Bash from rewriting POSIX container paths (/workspace, /home/dev,
+# /etc/codetainyrrr, /tmp/...) into Windows paths when sh calls native docker.exe.
+$env:MSYS_NO_PATHCONV = '1'; $env:MSYS2_ARG_CONV_EXCL = '*'
+try { sh $tmp } finally { Remove-Item $tmp -ErrorAction SilentlyContinue }
+"""
+
+# ── task.run ──────────────────────────────────────────────────────────────────
+# Builds the `docker run` argv as a bash array (spaces in paths/values never
+# word-split), then `exec docker "${args[@]}"`:
+#   - named volume <container_name>_ct_home → /home/dev
+#   - PROJECT_DIR → /workspace/workspace, --workdir /workspace/workspace (skipped when empty)
+#   - EXTRA_WORKSPACES semicolon list → /workspace/<basename> each
+#   - host ~/.codetainyrrr/{catalog.json,wizard.toml} (via {{ exe_dir }}) bind-mounted
+#     RO over the baked copies — live edits without a rebuild
+#   - CLAUDE_DIR → /home/dev/.claude, CLAUDE_JSON → /home/dev/.claude.json (RO, when set)
+#   - BYO config files (CCSTATUSLINE_CONFIG, ZSH_EXTRA_CONFIG, STARSHIP_CONFIG) RO staged
+#   - HOST_UID/GID (POSIX), WIRE_CCSTATUSLINE, GIT_AUTHOR_*/GIT_COMMITTER_*, API keys via -e
+#
+# Windows runs the same bash body via Git Bash sh (temp file); it omits
+# HOST_UID/GID (git-bash uid ≠ container uid; entrypoint defaults to 1000).
+# Backslash normalisation: `tr \\ /`.
+#
+# NOTE: EXTRA_WORKSPACES semicolon-split and basename dedup logic from run.rs
+# cannot be reproduced faithfully in a single shell one-liner without a loop.
+# The loop below is a direct port; it handles blanks and basename collisions
+# exactly as the Rust code does.
+
+[task.run]
+description = "Start the codetainyrrr container (builds image first if needed)"
+needs       = ["build"]
+
+[[task.run.steps]]
+type   = "shell"
+script = """
+set -a
+[ -f "${HOME}/.codetainyrrr/.env" ] && . "${HOME}/.codetainyrrr/.env"
+set +a
+set -e
+CONTAINER="${CONTAINER_NAME:-{{ container_name }}}"
+IMAGE="{{ image_tag }}"
+# Installed config dir (host) = the binary's own dir — the installer co-locates
+# the binary with its config. default('') guards a rare current_exe() failure.
+CFG_DIR="{{ exe_dir | default('') }}"
+
+# Already running — connect instead.
+if [ -n "$(docker ps -q --filter "name=^${CONTAINER}$")" ]; then
+    exec docker exec -it -u dev "${CONTAINER}" zsh
+fi
+
+# Build argv as an array so paths/values containing spaces never word-split.
+args=(run --rm -it --name "${CONTAINER}" --hostname "${CONTAINER}")
+args+=(-v "${CONTAINER}_ct_home:/home/dev")
+
+# Security hardening (mirrors the old docker-compose.yml): drop ALL caps,
+# re-add only the three the entrypoint's gosu drop needs (none survive exec),
+# and forbid privilege escalation.
+args+=(--cap-drop ALL --cap-add CHOWN --cap-add SETUID --cap-add SETGID)
+args+=(--security-opt no-new-privileges:true)
+docker network inspect codetainyrrr_default >/dev/null 2>&1 || \
+    docker network create codetainyrrr_default >/dev/null
+args+=(--network codetainyrrr_default)
+
+# Primary project → /workspace/workspace (matches legacy compose); skip if empty.
+PROJECT_DIR_NORM="$(printf '%s' "${PROJECT_DIR}" | tr '\\\\' '/')"
+[ -n "${PROJECT_DIR_NORM}" ] && args+=(-v "${PROJECT_DIR_NORM}:/workspace/workspace")
+
+# EXTRA_WORKSPACES: ';'-separated, each → /workspace/<basename>, dedup basenames.
+if [ -n "${EXTRA_WORKSPACES}" ]; then
+    USED=""
+    IFS=';' read -ra WS_LIST <<< "${EXTRA_WORKSPACES}"
+    for RAW in "${WS_LIST[@]}"; do
+        HOST="$(printf '%s' "${RAW}" | tr '\\\\' '/' | sed 's|/*$||')"
+        [ -z "${HOST}" ] && continue
+        BASE="${HOST##*/}"
+        [ -z "${BASE}" ] && continue
+        printf '%s\\n' "${USED}" | grep -qx "${BASE}" && continue
+        USED="${USED}
+${BASE}"
+        args+=(-v "${HOST}:/workspace/${BASE}")
+    done
+fi
+
+# Live-edit overrides: host ~/.codetainyrrr/{catalog.json,wizard.toml} shadow the
+# baked copies without a rebuild. Skipped when absent (e.g. run from a bundle).
+[ -f "${CFG_DIR}/catalog.json" ] && args+=(-v "${CFG_DIR}/catalog.json:/etc/codetainyrrr/catalog.json:ro")
+[ -f "${CFG_DIR}/wizard.toml" ]  && args+=(-v "${CFG_DIR}/wizard.toml:/etc/codetainyrrr/wizard.toml:ro")
+
+# CLAUDE_DIR override (RO ~/.claude).
+CLAUDE_NORM="$(printf '%s' "${CLAUDE_DIR}" | tr '\\\\' '/')"
+[ -n "${CLAUDE_NORM}" ] && args+=(-v "${CLAUDE_NORM}:/home/dev/.claude:ro")
+CLAUDE_JSON_NORM="$(printf '%s' "${CLAUDE_JSON}" | tr '\\\\' '/')"
+[ -n "${CLAUDE_JSON_NORM}" ] && [ -f "${CLAUDE_JSON_NORM}" ] && args+=(-v "${CLAUDE_JSON_NORM}:/home/dev/.claude.json:ro")
+
+# BYO config staging mounts (entrypoint copies them in on first start).
+CC_NORM="$(printf '%s' "${CCSTATUSLINE_CONFIG}" | tr '\\\\' '/')"
+ZSH_NORM="$(printf '%s' "${ZSH_EXTRA_CONFIG}" | tr '\\\\' '/')"
+STAR_NORM="$(printf '%s' "${STARSHIP_CONFIG}" | tr '\\\\' '/')"
+[ -n "${CC_NORM}" ]   && [ -f "${CC_NORM}" ]   && args+=(-v "${CC_NORM}:/etc/codetainyrrr/user-ccstatusline.json:ro")
+[ -n "${ZSH_NORM}" ]  && [ -f "${ZSH_NORM}" ]  && args+=(-v "${ZSH_NORM}:/etc/codetainyrrr/user-zshrc-extra.zsh:ro")
+[ -n "${STAR_NORM}" ] && [ -f "${STAR_NORM}" ] && args+=(-v "${STAR_NORM}:/etc/codetainyrrr/user-starship.toml:ro")
+
+# API keys (only when set).
+[ -n "${ANTHROPIC_API_KEY}" ]  && args+=(-e "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}")
+[ -n "${OPENAI_API_KEY}" ]     && args+=(-e "OPENAI_API_KEY=${OPENAI_API_KEY}")
+[ -n "${OPENROUTER_API_KEY}" ] && args+=(-e "OPENROUTER_API_KEY=${OPENROUTER_API_KEY}")
+[ -n "${GEMINI_API_KEY}" ]     && args+=(-e "GEMINI_API_KEY=${GEMINI_API_KEY}")
+
+# Runtime env (always). HOST_UID/GID drive the entrypoint's gosu drop so files
+# in mounted workspaces stay owned by the host user. GIT_COMMITTER mirrors AUTHOR.
+args+=(-e "CODING_CLI=${CODING_CLI}")
+args+=(-e "INSTALL_TOOLS=${INSTALL_TOOLS}")
+args+=(-e "INSTALL_PLUGINS=${INSTALL_PLUGINS}")
+args+=(-e "HOST_UID=$(id -u)" -e "HOST_GID=$(id -g)")
+args+=(-e "WIRE_CCSTATUSLINE=${WIRE_CCSTATUSLINE:-true}")
+args+=(-e "GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME}" -e "GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL}")
+args+=(-e "GIT_COMMITTER_NAME=${GIT_AUTHOR_NAME}" -e "GIT_COMMITTER_EMAIL=${GIT_AUTHOR_EMAIL}")
+
+# Land in the mounted project if given; else the workspace root /workspace
+# (never an empty /workspace/workspace).
+if [ -n "${PROJECT_DIR_NORM}" ]; then
+    args+=(--workdir /workspace/workspace)
+else
+    args+=(--workdir /workspace)
+fi
+
+args+=("${IMAGE}")
+exec docker "${args[@]}"
+"""
+
+# Windows variant: PowerShell delegates the POSIX body to Git Bash sh via a
+# temp file. Docker Desktop puts sh.exe on PATH. Forward slashes work for
+# Docker volume specs on Windows. Path backslash normalisation uses tr as on Linux.
+[[task.run.os.windows]]
+type   = "shell"
+script = """
+$body = @'
+set -a
+[ -f "${HOME}/.codetainyrrr/.env" ] && . "${HOME}/.codetainyrrr/.env"
+set +a
+set -e
+CONTAINER="${CONTAINER_NAME:-{{ container_name }}}"
+IMAGE="{{ image_tag }}"
+# exe_dir is a Windows path; normalise backslashes. Binary + config are
+# co-located by the installer, so the config dir is exe_dir itself.
+CFG_DIR="$(printf '%s' "{{ exe_dir | default('') }}" | tr '\\\\' '/')"
+
+if [ -n "$(docker ps -q --filter "name=^${CONTAINER}$")" ]; then
+    exec docker exec -it -u dev "${CONTAINER}" zsh
+fi
+
+# argv array — values with spaces never word-split.
+args=(run --rm -it --name "${CONTAINER}" --hostname "${CONTAINER}")
+args+=(-v "${CONTAINER}_ct_home:/home/dev")
+args+=(--cap-drop ALL --cap-add CHOWN --cap-add SETUID --cap-add SETGID)
+args+=(--security-opt no-new-privileges:true)
+docker network inspect codetainyrrr_default >/dev/null 2>&1 || \
+    docker network create codetainyrrr_default >/dev/null
+args+=(--network codetainyrrr_default)
+
+PROJECT_DIR_NORM="$(printf '%s' "${PROJECT_DIR}" | tr '\\\\' '/')"
+[ -n "${PROJECT_DIR_NORM}" ] && args+=(-v "${PROJECT_DIR_NORM}:/workspace/workspace")
+
+if [ -n "${EXTRA_WORKSPACES}" ]; then
+    USED=""
+    IFS=';' read -ra WS_LIST <<< "${EXTRA_WORKSPACES}"
+    for RAW in "${WS_LIST[@]}"; do
+        HOST="$(printf '%s' "${RAW}" | tr '\\\\' '/' | sed 's|/*$||')"
+        [ -z "${HOST}" ] && continue
+        BASE="${HOST##*/}"
+        [ -z "${BASE}" ] && continue
+        printf '%s\\n' "${USED}" | grep -qx "${BASE}" && continue
+        USED="${USED}
+${BASE}"
+        args+=(-v "${HOST}:/workspace/${BASE}")
+    done
+fi
+
+[ -f "${CFG_DIR}/catalog.json" ] && args+=(-v "${CFG_DIR}/catalog.json:/etc/codetainyrrr/catalog.json:ro")
+[ -f "${CFG_DIR}/wizard.toml" ]  && args+=(-v "${CFG_DIR}/wizard.toml:/etc/codetainyrrr/wizard.toml:ro")
+
+CLAUDE_NORM="$(printf '%s' "${CLAUDE_DIR}" | tr '\\\\' '/')"
+[ -n "${CLAUDE_NORM}" ] && args+=(-v "${CLAUDE_NORM}:/home/dev/.claude:ro")
+CLAUDE_JSON_NORM="$(printf '%s' "${CLAUDE_JSON}" | tr '\\\\' '/')"
+[ -n "${CLAUDE_JSON_NORM}" ] && [ -f "${CLAUDE_JSON_NORM}" ] && args+=(-v "${CLAUDE_JSON_NORM}:/home/dev/.claude.json:ro")
+CC_NORM="$(printf '%s' "${CCSTATUSLINE_CONFIG}" | tr '\\\\' '/')"
+ZSH_NORM="$(printf '%s' "${ZSH_EXTRA_CONFIG}" | tr '\\\\' '/')"
+STAR_NORM="$(printf '%s' "${STARSHIP_CONFIG}" | tr '\\\\' '/')"
+[ -n "${CC_NORM}" ]   && [ -f "${CC_NORM}" ]   && args+=(-v "${CC_NORM}:/etc/codetainyrrr/user-ccstatusline.json:ro")
+[ -n "${ZSH_NORM}" ]  && [ -f "${ZSH_NORM}" ]  && args+=(-v "${ZSH_NORM}:/etc/codetainyrrr/user-zshrc-extra.zsh:ro")
+[ -n "${STAR_NORM}" ] && [ -f "${STAR_NORM}" ] && args+=(-v "${STAR_NORM}:/etc/codetainyrrr/user-starship.toml:ro")
+
+[ -n "${ANTHROPIC_API_KEY}" ]  && args+=(-e "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}")
+[ -n "${OPENAI_API_KEY}" ]     && args+=(-e "OPENAI_API_KEY=${OPENAI_API_KEY}")
+[ -n "${OPENROUTER_API_KEY}" ] && args+=(-e "OPENROUTER_API_KEY=${OPENROUTER_API_KEY}")
+[ -n "${GEMINI_API_KEY}" ]     && args+=(-e "GEMINI_API_KEY=${GEMINI_API_KEY}")
+
+# HOST_UID/GID intentionally omitted on Windows: git-bash `id -u` is not the
+# container uid, and Docker Desktop manages volume ownership — the entrypoint
+# defaults to 1000 (matches the old docker-compose Windows behaviour).
+args+=(-e "CODING_CLI=${CODING_CLI}")
+args+=(-e "INSTALL_TOOLS=${INSTALL_TOOLS}")
+args+=(-e "INSTALL_PLUGINS=${INSTALL_PLUGINS}")
+args+=(-e "WIRE_CCSTATUSLINE=${WIRE_CCSTATUSLINE:-true}")
+args+=(-e "GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME}" -e "GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL}")
+args+=(-e "GIT_COMMITTER_NAME=${GIT_AUTHOR_NAME}" -e "GIT_COMMITTER_EMAIL=${GIT_AUTHOR_EMAIL}")
+if [ -n "${PROJECT_DIR_NORM}" ]; then
+    args+=(--workdir /workspace/workspace)
+else
+    args+=(--workdir /workspace)
+fi
+
+args+=("${IMAGE}")
+exec docker "${args[@]}"
+'@
+$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString() + ".sh")
+[System.IO.File]::WriteAllText($tmp, $body)
+# Stop MSYS/Git-Bash from rewriting POSIX container paths (/workspace, /home/dev,
+# /etc/codetainyrrr, /tmp/...) into Windows paths when sh calls native docker.exe.
+$env:MSYS_NO_PATHCONV = '1'; $env:MSYS2_ARG_CONV_EXCL = '*'
+try { sh $tmp } finally { Remove-Item $tmp -ErrorAction SilentlyContinue }
+"""
+
+# ── task.stop ─────────────────────────────────────────────────────────────────
+# Mirrors run.rs::stop: `docker stop <container>`.
+
+[task.stop]
+description = "Stop the running container"
+
+[[task.stop.steps]]
+type   = "shell"
+script = """
+set -a
+[ -f "${HOME}/.codetainyrrr/.env" ] && . "${HOME}/.codetainyrrr/.env"
+set +a
+docker stop "${CONTAINER_NAME:-{{ container_name }}}"
+"""
+
+[[task.stop.os.windows]]
+type   = "shell"
+script = """
+$body = @'
+set -a
+[ -f "${HOME}/.codetainyrrr/.env" ] && . "${HOME}/.codetainyrrr/.env"
+set +a
+docker stop "${CONTAINER_NAME:-{{ container_name }}}"
+'@
+$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString() + ".sh")
+[System.IO.File]::WriteAllText($tmp, $body)
+# Stop MSYS/Git-Bash from rewriting POSIX container paths (/workspace, /home/dev,
+# /etc/codetainyrrr, /tmp/...) into Windows paths when sh calls native docker.exe.
+$env:MSYS_NO_PATHCONV = '1'; $env:MSYS2_ARG_CONV_EXCL = '*'
+try { sh $tmp } finally { Remove-Item $tmp -ErrorAction SilentlyContinue }
+"""
+
+# ── task.connect ──────────────────────────────────────────────────────────────
+# Mirrors run.rs::connect_to: `docker exec -it <container> zsh`.
+
+[task.connect]
+description = "Open a zsh shell in the running container"
+
+[[task.connect.steps]]
+type   = "shell"
+script = """
+set -a
+[ -f "${HOME}/.codetainyrrr/.env" ] && . "${HOME}/.codetainyrrr/.env"
+set +a
+docker exec -it -u dev "${CONTAINER_NAME:-{{ container_name }}}" zsh
+"""
+
+[[task.connect.os.windows]]
+type   = "shell"
+script = """
+$body = @'
+set -a
+[ -f "${HOME}/.codetainyrrr/.env" ] && . "${HOME}/.codetainyrrr/.env"
+set +a
+docker exec -it -u dev "${CONTAINER_NAME:-{{ container_name }}}" zsh
+'@
+$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString() + ".sh")
+[System.IO.File]::WriteAllText($tmp, $body)
+# Stop MSYS/Git-Bash from rewriting POSIX container paths (/workspace, /home/dev,
+# /etc/codetainyrrr, /tmp/...) into Windows paths when sh calls native docker.exe.
+$env:MSYS_NO_PATHCONV = '1'; $env:MSYS2_ARG_CONV_EXCL = '*'
+try { sh $tmp } finally { Remove-Item $tmp -ErrorAction SilentlyContinue }
+"""
+
+# ── task.wait-ready ───────────────────────────────────────────────────────────
+# Polls for the ready_file written by entrypoint.rs (cmd/entrypoint.rs:51).
+# Uses poll to retry up to 60 times at 5-second intervals (5 min total).
+# The check executes inside the container so the file path is the container path.
+
+[task.wait-ready]
+description = "Wait for the container's ready_file to appear (polls up to 5 min)"
+
+[[task.wait-ready.steps]]
+type   = "shell"
+script = """
+set -a
+[ -f "${HOME}/.codetainyrrr/.env" ] && . "${HOME}/.codetainyrrr/.env"
+set +a
+docker exec "${CONTAINER_NAME:-{{ container_name }}}" test -f {{ ready_file }}
+"""
+poll   = { attempts = 60, delay_ms = 5000, until_exit_zero = true }
+
+[[task.wait-ready.os.windows]]
+type   = "shell"
+script = """
+$body = @'
+set -a
+[ -f "${HOME}/.codetainyrrr/.env" ] && . "${HOME}/.codetainyrrr/.env"
+set +a
+docker exec "${CONTAINER_NAME:-{{ container_name }}}" test -f {{ ready_file }}
+'@
+$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString() + ".sh")
+[System.IO.File]::WriteAllText($tmp, $body)
+# Stop MSYS/Git-Bash from rewriting POSIX container paths (/workspace, /home/dev,
+# /etc/codetainyrrr, /tmp/...) into Windows paths when sh calls native docker.exe.
+$env:MSYS_NO_PATHCONV = '1'; $env:MSYS2_ARG_CONV_EXCL = '*'
+try { sh $tmp } finally { Remove-Item $tmp -ErrorAction SilentlyContinue }
+"""
+poll   = { attempts = 60, delay_ms = 5000, until_exit_zero = true }
+
+# ── task.doctor ───────────────────────────────────────────────────────────────
+# Mirrors cmd/doctor.rs: checks Docker is reachable, the image exists, and
+# the container status. The Rust version iterated catalog items and checked
+# sentinel state (host-side registry.status). That host-side sentinel walk
+# is not portable here — listed explicitly as an unported capability below.
+
+[task.doctor]
+description = "Check Docker daemon, image, and container health"
+
+# Docker Go templates use {{ }} which conflicts with minijinja. Escape them
+# with {% raw %}...{% endraw %} blocks around the --format arguments.
+[[task.doctor.steps]]
+type   = "shell"
+script = """
+set -a
+[ -f "${HOME}/.codetainyrrr/.env" ] && . "${HOME}/.codetainyrrr/.env"
+set +a
+CONTAINER="${CONTAINER_NAME:-{{ container_name }}}"
+set -e
+echo "=== docker info ==="
+docker info --format {% raw %}"Server Version: {{.ServerVersion}}"{% endraw %}
+echo ""
+echo "=== image: {{ image_tag }} ==="
+if docker images -q {{ image_tag }} | grep -q .; then
+    docker image inspect --format {% raw %}"  created: {{.Created}}  size: {{.Size}}"{% endraw %} {{ image_tag }}
+    echo "  status: present"
+else
+    echo "  status: NOT FOUND — run 'codetainyrrr task build' to build"
+fi
+echo ""
+echo "=== container: ${CONTAINER} ==="
+if docker ps -q --filter "name=^${CONTAINER}$" | grep -q .; then
+    docker inspect --format {% raw %}"  state: {{.State.Status}}  started: {{.State.StartedAt}}"{% endraw %} "${CONTAINER}"
+elif docker ps -aq --filter "name=^${CONTAINER}$" | grep -q .; then
+    docker inspect --format {% raw %}"  state: {{.State.Status}} (stopped)"{% endraw %} "${CONTAINER}"
+else
+    echo "  state: not created"
+fi
+"""
+
+# Windows: PowerShell delegates the POSIX body to Git Bash sh via a temp file.
+[[task.doctor.os.windows]]
+type   = "shell"
+script = """
+$body = @'
+set -a
+[ -f "${HOME}/.codetainyrrr/.env" ] && . "${HOME}/.codetainyrrr/.env"
+set +a
+CONTAINER="${CONTAINER_NAME:-{{ container_name }}}"
+set -e
+echo "=== docker info ==="
+docker info --format {% raw %}"Server Version: {{.ServerVersion}}"{% endraw %}
+echo ""
+echo "=== image: {{ image_tag }} ==="
+if docker images -q {{ image_tag }} | grep -q .; then
+    docker image inspect --format {% raw %}"  created: {{.Created}}  size: {{.Size}}"{% endraw %} {{ image_tag }}
+    echo "  status: present"
+else
+    echo "  status: NOT FOUND - run 'codetainyrrr task build' to build"
+fi
+echo ""
+echo "=== container: ${CONTAINER} ==="
+if docker ps -q --filter "name=^${CONTAINER}$" | grep -q .; then
+    docker inspect --format {% raw %}"  state: {{.State.Status}}  started: {{.State.StartedAt}}"{% endraw %} "${CONTAINER}"
+elif docker ps -aq --filter "name=^${CONTAINER}$" | grep -q .; then
+    docker inspect --format {% raw %}"  state: {{.State.Status}} (stopped)"{% endraw %} "${CONTAINER}"
+else
+    echo "  state: not created"
+fi
+'@
+$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString() + ".sh")
+[System.IO.File]::WriteAllText($tmp, $body)
+# Stop MSYS/Git-Bash from rewriting POSIX container paths (/workspace, /home/dev,
+# /etc/codetainyrrr, /tmp/...) into Windows paths when sh calls native docker.exe.
+$env:MSYS_NO_PATHCONV = '1'; $env:MSYS2_ARG_CONV_EXCL = '*'
+try { sh $tmp } finally { Remove-Item $tmp -ErrorAction SilentlyContinue }
+"""
+
+# ── task.reset ────────────────────────────────────────────────────────────────
+# Mirrors cmd/reset.rs::reset_full: stop container (ignore errors), remove the
+# named home volume. The interactive "type RESET" prompt can't be reproduced
+# (engine shell steps have no interactive stdin), so the guard is an explicit
+# confirm env var: the first step aborts unless CODETAINYRRR_CONFIRM=RESET.
+#
+# NOTE: The Rust reset also clears sentinel files (host-side) for plugins_only
+# mode. That host-side sentinel walk is not ported here (see unported list).
+
+[task.reset]
+description = "DESTRUCTIVE: stop container and remove the home volume (prompts for confirmation; non-TTY: set CODETAINYRRR_CONFIRM=RESET)"
+
+# Confirmation gate — insmaller's `input` step kind (>=0.5.0). On a TTY it
+# prompts the user; non-TTY falls back to env CODETAINYRRR_CONFIRM. `confirm`
+# fails the step on mismatch, so the destructive steps below never run.
+# OS-agnostic, but duplicated in `os.windows` below because that block REPLACES
+# the default steps array on Windows (insmaller picks one set per platform).
+[[task.reset.steps]]
+type    = "input"
+name    = "CODETAINYRRR_CONFIRM"
+message = "Type RESET to permanently delete the home volume (CLIs, shell history, ~/.claude state):"
+confirm = "RESET"
+
+[[task.reset.steps]]
+type              = "shell"
+continue_on_error = true
+script            = """
+set -a
+[ -f "${HOME}/.codetainyrrr/.env" ] && . "${HOME}/.codetainyrrr/.env"
+set +a
+docker stop "${CONTAINER_NAME:-{{ container_name }}}"
+"""
+
+[[task.reset.steps]]
+type   = "shell"
+script = """
+set -a
+[ -f "${HOME}/.codetainyrrr/.env" ] && . "${HOME}/.codetainyrrr/.env"
+set +a
+docker volume rm "${CONTAINER_NAME:-{{ container_name }}}_ct_home"
+"""
+
+# Confirmation gate (Windows) — same `input` step as the POSIX branch. The
+# step kind is OS-agnostic; this exists because `os.windows` REPLACES the
+# default steps array on Windows, not extends it.
+[[task.reset.os.windows]]
+type    = "input"
+name    = "CODETAINYRRR_CONFIRM"
+message = "Type RESET to permanently delete the home volume (CLIs, shell history, ~/.claude state):"
+confirm = "RESET"
+
+[[task.reset.os.windows]]
+type              = "shell"
+continue_on_error = true
+script            = """
+$body = @'
+set -a
+[ -f "${HOME}/.codetainyrrr/.env" ] && . "${HOME}/.codetainyrrr/.env"
+set +a
+docker stop "${CONTAINER_NAME:-{{ container_name }}}"
+'@
+$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString() + ".sh")
+[System.IO.File]::WriteAllText($tmp, $body)
+# Stop MSYS/Git-Bash from rewriting POSIX container paths (/workspace, /home/dev,
+# /etc/codetainyrrr, /tmp/...) into Windows paths when sh calls native docker.exe.
+$env:MSYS_NO_PATHCONV = '1'; $env:MSYS2_ARG_CONV_EXCL = '*'
+try { sh $tmp } finally { Remove-Item $tmp -ErrorAction SilentlyContinue }
+"""
+
+[[task.reset.os.windows]]
+type   = "shell"
+script = """
+$body = @'
+set -a
+[ -f "${HOME}/.codetainyrrr/.env" ] && . "${HOME}/.codetainyrrr/.env"
+set +a
+docker volume rm "${CONTAINER_NAME:-{{ container_name }}}_ct_home"
+'@
+$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString() + ".sh")
+[System.IO.File]::WriteAllText($tmp, $body)
+# Stop MSYS/Git-Bash from rewriting POSIX container paths (/workspace, /home/dev,
+# /etc/codetainyrrr, /tmp/...) into Windows paths when sh calls native docker.exe.
+$env:MSYS_NO_PATHCONV = '1'; $env:MSYS2_ARG_CONV_EXCL = '*'
+try { sh $tmp } finally { Remove-Item $tmp -ErrorAction SilentlyContinue }
+"""

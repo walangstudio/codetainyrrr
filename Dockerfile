@@ -1,23 +1,12 @@
-# ── Stage 1: build the codetainyrrr binary ────────────────────────────────────
-FROM rust:slim-bookworm AS builder
-
-WORKDIR /build
-
-# Cache dependency compilation separately from source changes.
-# Copy manifests first, build a dummy main, then replace with real source.
-COPY Cargo.toml Cargo.lock ./
-COPY crates/codetainyrrr/Cargo.toml crates/codetainyrrr/
-RUN mkdir -p crates/codetainyrrr/src \
-    && echo 'fn main(){}' > crates/codetainyrrr/src/main.rs \
-    && cargo build --release --manifest-path crates/codetainyrrr/Cargo.toml \
-    && rm crates/codetainyrrr/src/main.rs
-
-# Now build the real source
-COPY crates/codetainyrrr/src crates/codetainyrrr/src
-RUN touch crates/codetainyrrr/src/main.rs \
-    && cargo build --release --manifest-path crates/codetainyrrr/Cargo.toml
-
-# ── Stage 2: runtime image ────────────────────────────────────────────────────
+# codetainyrrr — config-only image. No Rust build: the insmaller engine binary
+# is bundled and drives all install/lifecycle from the baked /etc/codetainyrrr
+# config (installer.toml + catalog.json + wizard.toml + plugins/).
+#
+# `codetainyrrr-linux` must be present in the build context: the matching
+# x86_64-unknown-linux-gnu insmaller engine binary, renamed to the product
+# name (release.yml fetches it from the pinned insmaller release; locally it
+# is built once from the engine source). insmaller is not forked — only the
+# packaged binary is renamed.
 FROM debian:bookworm-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -25,11 +14,19 @@ ARG HOST_UID=1000
 ARG HOST_GID=1000
 ARG USERNAME=dev
 
-# Base packages always installed
+# Base packages always installed.
+#
+# Note on `gh`: pre-baked because claude-squad's upstream install.sh
+# (gh: smtg-ai/claude-squad) tries to add the github-cli apt repo via
+# `sudo dd`/`sudo tee`/`sudo chmod` — the container's sudoers only grants
+# apt-get/apt, so the gh bootstrap would prompt for a password and fail.
+# Pre-installing gh makes claude-squad's dependency check a no-op.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
+    bzip2 \
     ca-certificates \
     curl \
+    gh \
     git \
     gnupg \
     gosu \
@@ -108,14 +105,20 @@ USER root
 
 WORKDIR /workspace
 
-# Install the codetainyrrr binary
-COPY --from=builder /build/target/release/codetainyrrr /usr/local/bin/codetainyrrr
+# Bundle the engine binary as `codetainyrrr` (config-only: no in-image Rust
+# build). Same insmaller binary, product-renamed at packaging time.
+COPY codetainyrrr-linux /usr/local/bin/codetainyrrr
+RUN chmod +x /usr/local/bin/codetainyrrr
 
-# Bake catalog.json + wizard.json so the entrypoint can read them without a bind-mount
-COPY catalog.json  /etc/codetainyrrr/catalog.json
-COPY wizard.json   /etc/codetainyrrr/wizard.json
+# Bake the insmaller config so the entrypoint installs without a bind-mount.
+# plugins/ MUST sit beside installer.toml (insmaller bounds recipe-pack plugin
+# paths to the config's directory).
+COPY catalog.json    /etc/codetainyrrr/catalog.json
+COPY installer.toml  /etc/codetainyrrr/installer.toml
+COPY wizard.toml     /etc/codetainyrrr/wizard.toml
+COPY plugins         /etc/codetainyrrr/plugins
 
-# Thin entrypoint shim: fix ownership as root, drop to dev user, hand off to Rust binary
+# Thin entrypoint shim: fix ownership as root, drop to dev user, run codetainyrrr install.
 COPY scripts/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

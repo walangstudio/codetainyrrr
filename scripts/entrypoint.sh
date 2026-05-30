@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# entrypoint.sh — thin shim: fix ownership as root, drop to dev user, hand off to Rust binary.
+# entrypoint.sh — thin shim: fix ownership as root, drop to dev user, then run
+# the engine to install the selected CLI/tools/plugins.
 #
-# The codetainyrrr binary (at /usr/local/bin/codetainyrrr) handles all tool/plugin
-# installation via its installer registry and sentinel files. This script's only job
-# is the root → unprivileged-user drop that must happen before any user code runs.
+# Tool/plugin installation is fully config-driven by the engine (the insmaller
+# binary, packaged here as `codetainyrrr`) using the baked
+# /etc/codetainyrrr/{installer.toml,catalog.json} + plugins/. This script's
+# only job is the root → unprivileged-user drop and handing the selection
+# (passed as env by `codetainyrrr task run`) to `codetainyrrr install`.
 set -e
 
 if [ "$(id -u)" = "0" ]; then
@@ -20,10 +23,10 @@ if [ "$(id -u)" = "0" ]; then
 fi
 
 # Apply BYO config overrides once per home volume. If the user provided host
-# paths in .env (CCSTATUSLINE_CONFIG / ZSH_EXTRA_CONFIG / STARSHIP_CONFIG), run.rs
-# bind-mounts each to a staging path under /etc/codetainyrrr/. Copy those into
-# the home volume here — guarded by a marker file so user edits inside the
-# container survive subsequent starts.
+# paths in .env (CCSTATUSLINE_CONFIG / ZSH_EXTRA_CONFIG / STARSHIP_CONFIG),
+# task.run bind-mounts each to a staging path under /etc/codetainyrrr/. Copy
+# those into the home volume here — guarded by a marker file so user edits
+# inside the container survive subsequent starts.
 _byo_mark="$HOME/.config/codetainyrrr-byo-applied"
 if [ ! -f "$_byo_mark" ]; then
     [ -f /etc/codetainyrrr/user-ccstatusline.json ] && \
@@ -38,5 +41,31 @@ if [ ! -f "$_byo_mark" ]; then
     mkdir -p "$(dirname "$_byo_mark")" && touch "$_byo_mark"
 fi
 
-# Running as dev user — hand off to the Rust binary.
-exec /usr/local/bin/codetainyrrr entrypoint "$@"
+# Self-heal CRLF line endings on shell config files seeded into the home
+# volume (Docker copies image /home/dev into the named volume only once, so a
+# CRLF-corrupted file baked into an older image would persist forever).
+# Idempotent and cheap.
+for _f in "$HOME/.zshrc" "$HOME/.config/zsh/extra.zsh" "$HOME/.config/starship.toml"; do
+    if [ -f "$_f" ] && grep -q $'\r' "$_f" 2>/dev/null; then
+        sed -i 's/\r$//' "$_f" 2>/dev/null || true
+    fi
+done
+
+# Running as dev user — install the selected CLI/tools/plugins via the engine,
+# then drop to an interactive shell. Selection arrives as env from
+# `codetainyrrr task run` (.env CSV vars). Install failures don't block the shell:
+# the engine collects per-key failures, and a broken optional tool must not
+# make the container unusable (matches the prior binary's behaviour).
+_cli="${CODING_CLI:-claude}"
+_tools="$(printf '%s' "${INSTALL_TOOLS:-}" | tr ',' ' ')"
+_plugins="$(printf '%s' "${INSTALL_PLUGINS:-}" | tr ',' ' ')"
+# shellcheck disable=SC2086
+codetainyrrr install $_cli $_tools $_plugins \
+    --config /etc/codetainyrrr/installer.toml \
+    --catalog /etc/codetainyrrr/catalog.json \
+    || echo "codetainyrrr: some installs failed (see above); continuing" >&2
+
+# Readiness marker — `codetainyrrr task wait-ready` polls this.
+touch /tmp/codetainyrrr.ready
+
+exec "${SHELL:-/bin/zsh}" "$@"

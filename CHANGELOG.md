@@ -6,6 +6,193 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`bzip2` baked into the container image** (`Dockerfile` apt install) so
+  installers that ship `.tar.bz2` artifacts (e.g. `goose`) can extract.
+- **`scripts/test-clis.sh`** — gated per-CLI end-to-end harness (`CT_E2E=1`).
+  Per CLI it asserts (1) `setup --answers` is config-only (no host install),
+  (2) the CLI installs and is on PATH in a throwaway container
+  (`docker run --rm -e CODING_CLI=<cli> codetainyrrr:local`). Auto-detects
+  repo-vs-bundle layout and bind-mounts the live `catalog.json` /
+  `installer.toml` over the baked copies so changes are testable without an
+  image rebuild. Configurable via `CT_BIN`/`CT_IMAGE`/`CT_CLIS`/`CT_TIMEOUT`.
+
+### Changed
+
+- **Engine pinned to insmaller v0.5.1** (`release.yml`
+  `INSMALLER_VERSION_DEFAULT`). Brings interactive `prompt`/`input` task
+  steps, `[settings] interactive_tasks` / `setup_writes_config_only` /
+  `prefer_bash_on_windows`, TUI arrow navigation between fields, and the
+  collapsible group tree.
+- **`setup` writes config only, never installs on the host.** Enabled via
+  `[settings] setup_writes_config_only = true`. Previously the engine
+  unconditionally ran each selected catalog item's install on the host
+  after the wizard — which on Windows handed bash scripts
+  (`curl -fsSL … | bash`, `nvm`, `&&`, `</dev/null`) to PowerShell. The
+  catalog's installs are Linux/container scripts run by the entrypoint
+  inside the container; the wizard now writes `~/.codetainyrrr/.env` and
+  stops.
+- **`task.reset` confirmation is interactive.** The destructive guard is now
+  an insmaller `type = "input"` step (`confirm = "RESET"`) — type `RESET` to
+  proceed; mismatch fails the step and the destructive volume removal never
+  runs. Non-TTY automation keeps working: the resolver falls back to the env
+  var of the same name (`CODETAINYRRR_CONFIRM=RESET`).
+- **Setup wizard trimmed to a coding-CLI focus.** `wizard.toml` is reduced to
+  3 pages — *AI Coding Assistant* (CLI selection + container name) →
+  *Project Directory* (PROJECT_DIR + EXTRA_WORKSPACES) → *API Keys* (only
+  those declared by the selected CLI). Dev-tools / plugins / git identity /
+  claude-settings / custom-configs pages are removed; `task.run` still
+  honours `INSTALL_TOOLS`, `INSTALL_PLUGINS`, `GIT_AUTHOR_*`, `CLAUDE_DIR`,
+  and `*_CONFIG` from `.env` if you set them by hand or via a custom wizard.
+- **`task.run` workdir defaults to `/workspace` when no project is selected**
+  (was hardcoded `/workspace/workspace`, dropping a no-project container
+  into an empty Docker-auto-created dir). With `PROJECT_DIR` set it still
+  lands at the mounted `/workspace/workspace`.
+- **Welcome banner waits up to 30 minutes for the CLI install** (was 6 min)
+  — `scripts/zshrc` uses `_ct_max="${CT_LAUNCH_WAIT_SECS:-1800}"`, in
+  seconds, env-overridable (`0` to skip). Slow links downloading the
+  `claude` 240 MB binary no longer time out before install completes;
+  `NO_AUTOLAUNCH=1` still drops to a plain shell.
+- **MSYS path-conversion guards in every `os.windows` task wrapper.** Each
+  PowerShell wrapper now sets `$env:MSYS_NO_PATHCONV = '1'` and
+  `$env:MSYS2_ARG_CONV_EXCL = '*'` before `sh $tmp` so MSYS / Git Bash
+  doesn't rewrite container paths (`/workspace`, `/home/dev`,
+  `/etc/codetainyrrr`, `/tmp/…`) into Windows paths (`C:/msys64/…`,
+  `C:/Program Files/Git/…`) when `sh` execs native `docker.exe`. Fixes
+  `--workdir`, volume mounts, and `docker exec` paths on Windows hosts.
+- **Config-only repo.** All Rust (`crates/`, `Cargo.*`) is removed. The
+  `codetainyrrr` binary is now the [insmaller](https://github.com/walangstudio/insmaller)
+  engine (pinned ≥0.3.3), unforked and renamed at packaging time. The repo
+  ships `installer.toml` (recipes/desugar + `[task.*]` Docker lifecycle +
+  `[settings.setup_output]` + `[project]`), `catalog.json`, `wizard.toml`,
+  `plugins/`, plus `install.toml` (the self-install recipe).
+
+### Fixed
+
+- **`goose` install entry rewritten.** The old URL
+  `https://install.goose.rs` is dead. The catalog now uses the canonical
+  Block release script wrapped to work in the codetainyrrr container:
+  `bash -c 'cd $HOME && curl -fsSL https://github.com/block/goose/releases/download/stable/download_cli.sh | CONFIGURE=false bash'`.
+  `cd $HOME` because the script's silent `curl --output FILE` downloads
+  into the (read-only-for-`dev`) `/workspace` cwd and fails with a
+  misleading "Failed to download from fallback url"; `CONFIGURE=false`
+  skips the script's terminal `goose configure` interactive prompt; the
+  outer `bash -c` makes the spec match insmaller's `shell_literal`
+  catch-all (`looks_like_shell` accepts only specs starting with
+  `curl `/`wget `/`sh `/`bash ` or containing `| bash`/`|bash`/`| sh`/`|sh`).
+- **Self-install replaces the shell installers.** `install.sh`/`install.ps1`/
+  `uninstall.sh`/`uninstall.ps1` are removed. The bundle ships the binary +
+  `install.toml` (as `installer.toml`) at the root and the runtime config +
+  prebuilt image under `payload/`. `./codetainyrrr task install` copies the
+  binary + config (co-located, so config discovery works anywhere) into
+  `$CODETAINYRRR_HOME` (default `~/.codetainyrrr`) and wires PATH
+  (copy/symlink/ensure_line on POSIX, a User PATH entry on Windows); `task
+  uninstall` reverses it. Relies on insmaller 0.3.2 app-home discovery + 0.3.3
+  exe-sibling discovery / `exe_dir`.
+- **Docker image ships prebuilt, no local build.** CI (`release.yml`) builds
+  the config-only image once and `docker save`s it into every bundle's
+  `payload/` as `codetainyrrr-image.tar.gz` (tagged `codetainyrrr:local` to
+  match `image_tag`). `task.build` is now inspect-or-`docker load` rather than
+  `docker build`; `task.run` loads the image on first use. Installed users need
+  no Dockerfile/build context.
+- **`task.run` hardening.** `docker run` argv is built as a bash array (paths
+  and values with spaces no longer word-split); the project mounts at
+  `/workspace/workspace` with a matching `--workdir`; `HOST_UID/GID` (POSIX),
+  `WIRE_CCSTATUSLINE`, and `GIT_COMMITTER_*` are passed; `CLAUDE_JSON` is
+  mounted to `/home/dev/.claude.json`; host `~/.codetainyrrr/{catalog.json,
+  wizard.toml}` shadow the baked copies for live edits.
+- **`task.reset` is gated** behind `CODETAINYRRR_CONFIRM=RESET` to prevent an
+  accidental home-volume wipe.
+
+## [0.2.1] - 2026-05-14
+
+### Added
+
+- **`install.sh` and `install.ps1`** — one-line installer scripts (curl/iwr
+  pipeline) that detect OS+arch, download the matching release asset, verify
+  the SHA256 sidecar, place the binary on PATH, and support `--version`,
+  `--pre-release`, `--uninstall`. Replaces the manual `curl -o` snippet in
+  the README.
+- **Release workflow `workflow_dispatch` now creates the tag.** Triggering
+  the workflow with a tag input creates and pushes the tag from inside the
+  workflow, then checks it out for the build. The previous flow required the
+  tag to exist beforehand and silently built from the dispatch branch.
+- **Tag-vs-Cargo-version check.** The release workflow refuses to proceed if
+  the tag does not match `crates/codetainyrrr/Cargo.toml [package].version`,
+  preventing "tagged v0.3.0 but binary reports 0.2.x" mismatches.
+- **CHANGELOG section required.** The release workflow fails fast if there
+  is no `## [<version>]` section in `CHANGELOG.md` for the tag — no more
+  empty-bodied "Release vX.Y.Z" placeholders.
+- **Build provenance attestations.** Every release asset is signed via
+  `actions/attest-build-provenance` (SLSA), giving downstream installers a
+  verifiable supply-chain claim.
+- **Shell Tools category** with `tmux`, `zellij`, `fzf`, `ripgrep`, `bat`
+  (linked as `bat` over Debian's `batcat`), `eza`, and `zoxide`. tmux unblocks
+  multi-agent orchestrators that drive multiple panes.
+- **SDD / Orchestration category** consolidating spec-driven workflows and
+  multi-agent runners into a single wizard page (previously split across
+  Tools + Plugins). Contains:
+  - **spec-kit** (GitHub `spec-kit`, `uv:specify-cli@git+…`) — greenfield SDD
+  - **openspec** (`npm:@fission-ai/openspec`) — brownfield SDD with delta tracking
+  - **bmad-method** (`npm:bmad-method`, invoke via `npx bmad-method install`) — 12+ agent BMAD workflow
+  - **ruflo** (Claude marketplace) — 100+ specialized agents
+  - **claude-squad** (curl-pipe; binary `cs`; depends on `tmux`) — parallel-agent panes
+  - **amux** (`gh:andyrewlee/amux`; depends on `tmux`) — TUI for parallel coding agents
+  - **dex** (`gh:francescoalemanno/dex`) — structured Ralph-loop orchestrator (plan/implement/review across any CLI)
+  - **plandex** (`gh:plandex-ai/plandex`) — open-source agent for large projects with multi-step plans, branching, sandboxed execution
+- **Wizard `'item' in ${VAR}` operator** for CSV membership conditions, plus
+  per-`WizardField` `condition` is now honored by `page_custom`. The
+  ccstatusline config prompt is now skipped when ccstatusline isn't selected.
+- **`gh` baked into the container image** so claude-squad's upstream install
+  script doesn't try to wire the github-cli apt repo through `sudo dd`/
+  `sudo tee` (the container sudoers only allows `apt-get`/`apt`). Requires
+  `codetainyrrr run --rebuild` to pick up.
+- **`.gitattributes`** locks `*.sh`/`Dockerfile`/`*.yml`/`*.yaml` to LF and
+  `*.ps1`/`*.cmd`/`*.bat` to CRLF, preventing Windows `core.autocrlf=true`
+  from corrupting the container entrypoint on checkout.
+- **`install.sh` / `install.ps1`** — one-line installer scripts (curl/iwr
+  pipeline) that detect OS+arch, download the matching release asset, verify
+  the SHA256 sidecar, place the binary on PATH, and support `--version`,
+  `--pre-release`, `--uninstall`.
+
+### Changed
+
+- **Catalog categories collapsed to six**: `Coding Tools`, `Frameworks`,
+  `Shell Tools`, `Coding CLI Plugins`, `SDD / Orchestration`,
+  `Memory & Knowledge`. Replaces the eight-category v0.2.0 layout
+  (Languages + Package Managers merged into `Coding Tools`; Claude Code
+  Plugins renamed to the broader `Coding CLI Plugins`; AI Memory & Knowledge
+  shortened; Spec-Driven Dev + AI Orchestration merged). Keys unchanged so
+  `catalog.user.json` overrides still merge by key.
+- **`rtk` scoped to claude** (`supported_clis: ["claude"]`) and grouped with
+  the other `Coding CLI Plugins` entries. Its `post_install` hardcodes
+  `rtk hook claude` + `~/.claude/settings.json`, so the multi-CLI label was
+  inaccurate.
+- **`reset` now resolves the container name from `catalog.project.container_name_default`** when `.env` is missing or `CONTAINER_NAME` is empty — fixes
+  "no such volume: `_ct_home`" when the user runs `reset` outside a configured
+  project dir.
+- **`scripts/entrypoint.sh` line endings** normalized to LF. Windows clones
+  with `autocrlf=true` previously baked CRLF into the image, causing
+  `/usr/bin/env: 'bash\r': No such file or directory` on container start.
+- **`react` install** points at `npm:vite` only. `create-react-app` is
+  archived and no longer publishable.
+- **`expo` install** points at `npm:create-expo-app` (the current
+  scaffolder). The deprecated global `expo-cli` is gone.
+- **`react-native` install** points at `npm:@react-native-community/cli`.
+  The bare `react-native` global package is no longer the supported way to
+  bootstrap.
+
+### Removed
+
+- **`gitnexus` dropped** from the catalog. Upstream's transitive
+  `onnxruntime-node@1.26.0` postinstall is broken on Linux + Node 24 (chmod
+  on a missing CUDA provider .so), and the vendored `tree-sitter-dart` build
+  step fails to find its npx package.json. Users who still want it can add
+  it via `catalog.user.json` once upstream stabilizes. `graphify` and
+  `mempalace` (the other Memory & Knowledge entries) continue to work; they
+  install via `uv` and don't pull onnxruntime-node.
+
 ## [0.2.0] - 2026-05-07
 
 Full Rust rewrite. Replaces the bash + PowerShell wizard, run, and reset
@@ -146,6 +333,7 @@ First release. Captures the full surface of `codetainyrrr` as a sandboxed AI-cod
 - Image base: Debian Bookworm Slim with zsh, git, Python 3.11, NVM, RTK, jq, curl/wget, zip.
 - Security: `cap_drop: ALL`, `no-new-privileges:true`, container can only see the mounted workspace and your `~/.claude` if you opted in.
 
-[Unreleased]: https://github.com/ntancardoso/codetainyrrr/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/ntancardoso/codetainyrrr/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/ntancardoso/codetainyrrr/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/ntancardoso/codetainyrrr/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ntancardoso/codetainyrrr/releases/tag/v0.1.0

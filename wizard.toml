@@ -1,0 +1,51 @@
+# codetainyrrr setup wizard (insmaller wizard schema).
+# Pages run in order; `selected.inputs` unions requires_input of entries
+# selected on earlier pages, so the keys page follows the CLI page.
+#
+# Coding-CLI-focused flow: pick the CLI, point at a project, drop in the key.
+# Dev tools, plugins, git identity, claude-settings sync, and custom configs
+# are archived on the feat/config-only-insmaller branch — re-add a page here to
+# bring any of them back. The container still honours INSTALL_TOOLS /
+# INSTALL_PLUGINS / GIT_AUTHOR_* / CLAUDE_DIR / *_CONFIG from .env if set, so
+# nothing in the task pipeline breaks when those vars are simply absent.
+
+[[page]]
+id = "cli"
+title = "AI Coding Assistant"
+description = "Which CLI should run inside the container?"
+[[page.field]]
+id = "CODING_CLI"
+type = "single_select"
+source = "catalog.clis"
+default = "claude"
+[[page.field]]
+id = "CONTAINER_NAME"
+type = "text"
+prompt = "Container name (shown in docker ps):"
+default = "codetainyrrr"
+
+[[page]]
+id = "paths"
+title = "Project Directory"
+description = "Optionally mount a host folder as /workspace. Decline both for a fully sandboxed container. Windows (C:\\path) and Unix (/path or C:/path) accepted."
+[[page.field]]
+id = "PROJECT_DIR"
+type = "path"
+prompt = "Path to your project (absolute path):"
+default = ""
+required = false
+[[page.field]]
+id = "EXTRA_WORKSPACES"
+type = "text"
+prompt = "Extra paths (semicolon-separated):"
+default = ""
+required = false
+
+[[page]]
+id = "api_keys"
+title = "API Keys"
+description = "Keys for the selected CLI(s) only. Stored in your local .env, never sent anywhere. Blank = keep existing or use OAuth."
+[[page.field]]
+id = "_api_keys"
+type = "text"
+source = "selected.inputs"

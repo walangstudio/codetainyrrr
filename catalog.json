@@ -1,23 +1,13 @@
 {
-  "project": {
-    "category_order": [
-      "Languages",
-      "Package Managers",
-      "Frameworks",
-      "Tools",
-      "AI Tools",
-      "Claude Code Plugins",
-      "AI Memory & Knowledge",
-      "AI Orchestration"
-    ]
-  },
   "clis": [
     {
       "key": "aider",
       "name": "Aider",
       "description": "AI pair programmer — great for git workflows (Python)",
-      "needs_keys": ["OPENAI_API_KEY"],
-      "bin": "aider",
+      "requires_input": [
+        { "id": "OPENAI_API_KEY", "type": "secret", "required": false }
+      ],
+      "provides_command": "aider",
       "dependencies": ["uv"],
       "install": "uv:aider-chat"
     },
@@ -25,16 +15,17 @@
       "key": "claude",
       "name": "Claude Code",
       "description": "Anthropic's official agentic CLI",
-      "needs_keys": ["ANTHROPIC_API_KEY"],
-      "oauth_supported": true,
-      "bin": "claude",
+      "requires_input": [
+        { "id": "ANTHROPIC_API_KEY", "type": "secret", "required": false }
+      ],
+      "provides_command": "claude",
       "install": "curl -fsSL https://claude.ai/install.sh | bash"
     },
     {
       "key": "cn",
       "name": "Continue Dev",
       "description": "Continue Dev CLI",
-      "bin": "cn",
+      "provides_command": "cn",
       "dependencies": ["node"],
       "install": "npm:@continuedev/cli"
     },
@@ -42,8 +33,10 @@
       "key": "codex",
       "name": "OpenAI Codex",
       "description": "OpenAI agent CLI",
-      "needs_keys": ["OPENAI_API_KEY"],
-      "bin": "codex",
+      "requires_input": [
+        { "id": "OPENAI_API_KEY", "type": "secret", "required": false }
+      ],
+      "provides_command": "codex",
       "dependencies": ["node"],
       "install": "npm:@openai/codex"
     },
@@ -51,9 +44,10 @@
       "key": "gemini",
       "name": "Google Gemini",
       "description": "Google Gemini CLI",
-      "needs_keys": ["GEMINI_API_KEY"],
-      "oauth_supported": true,
-      "bin": "gemini",
+      "requires_input": [
+        { "id": "GEMINI_API_KEY", "type": "secret", "required": false }
+      ],
+      "provides_command": "gemini",
       "dependencies": ["node"],
       "install": "npm:@google/gemini-cli"
     },
@@ -61,14 +55,14 @@
       "key": "goose",
       "name": "Goose",
       "description": "Block's AI developer agent",
-      "bin": "goose",
-      "install": "curl -fsSL https://install.goose.rs | bash"
+      "provides_command": "goose",
+      "install": "bash -c 'cd $HOME && curl -fsSL https://github.com/block/goose/releases/download/stable/download_cli.sh | CONFIGURE=false bash'"
     },
     {
       "key": "kilo",
       "name": "Kilocode",
       "description": "Kilocode CLI",
-      "bin": "kilo",
+      "provides_command": "kilo",
       "dependencies": ["node"],
       "install": "npm:@kilocode/cli"
     },
@@ -76,15 +70,17 @@
       "key": "opencode",
       "name": "OpenCode",
       "description": "OpenCode AI",
-      "bin": "opencode",
+      "provides_command": "opencode",
       "install": "curl -fsSL https://opencode.ai/install | bash"
     },
     {
       "key": "pi",
       "name": "Pi",
       "description": "Pi coding agent (Anthropic-powered)",
-      "needs_keys": ["ANTHROPIC_API_KEY"],
-      "bin": "pi",
+      "requires_input": [
+        { "id": "ANTHROPIC_API_KEY", "type": "secret", "required": false }
+      ],
+      "provides_command": "pi",
       "dependencies": ["node"],
       "install": "npm:@mariozechner/pi-coding-agent"
     }
@@ -92,158 +88,146 @@
   "tools": [
     {
       "key": "bun",
-      "category": "Languages",
+      "category": "Coding Tools",
       "default": false,
-      "supported_clis": ["*"],
       "description": "Fast all-in-one JS runtime + bundler + pkg mgr",
       "install": "curl -fsSL https://bun.sh/install | bash"
     },
     {
       "key": "cpp",
-      "category": "Languages",
+      "category": "Coding Tools",
       "default": false,
-      "supported_clis": ["*"],
       "description": "C/C++ — gcc, clang, cmake, gdb, valgrind",
       "install": "apt:build-essential clang cmake gdb valgrind"
     },
     {
       "key": "deno",
-      "category": "Languages",
+      "category": "Coding Tools",
       "default": false,
-      "supported_clis": ["*"],
       "description": "Secure TypeScript runtime — no node_modules",
       "install": "curl -fsSL https://deno.land/install.sh | sh -s -- -y"
     },
     {
       "key": "dotnet",
-      "category": "Languages",
+      "category": "Coding Tools",
       "default": false,
-      "supported_clis": ["*"],
       "description": "C#/F# — .NET SDK LTS",
       "install": "curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel LTS --install-dir $HOME/.dotnet"
     },
     {
       "key": "go",
-      "category": "Languages",
+      "category": "Coding Tools",
       "default": false,
-      "supported_clis": ["*"],
       "description": "Go — CLI / services / systems (latest stable)",
       "install": "go:latest"
     },
     {
       "key": "java",
-      "category": "Languages",
+      "category": "Coding Tools",
       "default": false,
-      "supported_clis": ["*"],
       "description": "Java LTS via SDKMAN",
       "dependencies": ["sdkman"],
       "install": "sdkman:java"
     },
     {
       "key": "node",
-      "category": "Languages",
+      "category": "Coding Tools",
       "default": true,
-      "supported_clis": ["*"],
       "description": "Node.js LTS via NVM",
       "install": "nvm:lts"
     },
     {
       "key": "php",
-      "category": "Languages",
+      "category": "Coding Tools",
       "default": false,
-      "supported_clis": ["*"],
       "description": "PHP CLI + common extensions",
       "install": "apt:php-cli php-mbstring php-xml php-curl"
     },
     {
       "key": "python",
-      "category": "Languages",
+      "category": "Coding Tools",
       "default": false,
-      "supported_clis": ["*"],
       "description": "Python toolchain — uv, poetry, pipenv, black, ruff, mypy",
       "install": "python:tools"
     },
     {
       "key": "ruby",
-      "category": "Languages",
+      "category": "Coding Tools",
       "default": false,
-      "supported_clis": ["*"],
       "description": "Ruby — full apt stack",
       "install": "apt:ruby-full"
     },
     {
       "key": "rust",
-      "category": "Languages",
+      "category": "Coding Tools",
       "default": false,
-      "supported_clis": ["*"],
-      "description": "Rust via rustup — systems / WASM",
+      "description": "Rust via rustup — systems / WASM (includes cargo)",
       "install": "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path"
     },
     {
       "key": "ts",
-      "category": "Languages",
+      "category": "Coding Tools",
       "default": true,
-      "supported_clis": ["*"],
       "description": "TypeScript — typescript, ts-node, tsx",
       "dependencies": ["node"],
       "install": "npm:typescript ts-node tsx"
     },
     {
       "key": "cargo",
-      "category": "Package Managers",
+      "category": "Coding Tools",
       "default": false,
-      "supported_clis": ["*"],
       "description": "Cargo — Rust package manager (installed with rustup)",
       "dependencies": ["rust"]
     },
     {
       "key": "pnpm",
-      "category": "Package Managers",
+      "category": "Coding Tools",
       "default": false,
-      "supported_clis": ["*"],
       "description": "pnpm — fast disk-efficient JS pkg mgr (via corepack)",
       "dependencies": ["node"],
       "install": "corepack:pnpm"
     },
     {
       "key": "sdkman",
-      "category": "Package Managers",
+      "category": "Coding Tools",
       "default": false,
-      "supported_clis": ["*"],
       "description": "SDKMAN — version manager for JVM ecosystem (java, kotlin, scala, gradle, maven)",
       "install": "[ ! -f \"$HOME/.sdkman/bin/sdkman-init.sh\" ] && rm -rf \"$HOME/.sdkman\"; curl -s https://get.sdkman.io | bash"
     },
     {
       "key": "uv",
-      "category": "Package Managers",
+      "category": "Coding Tools",
       "default": false,
-      "supported_clis": ["*"],
       "description": "uv — fast Python package manager & tool runner (Astral)",
       "install": "curl -LsSf https://astral.sh/uv/install.sh | sh"
     },
     {
       "key": "yarn",
-      "category": "Package Managers",
+      "category": "Coding Tools",
       "default": false,
-      "supported_clis": ["*"],
       "description": "Yarn — JS pkg mgr (via corepack)",
       "dependencies": ["node"],
       "install": "corepack:yarn"
     },
     {
+      "key": "lazygit",
+      "category": "Coding Tools",
+      "default": false,
+      "description": "Git TUI — visual branch / diff navigation",
+      "install": "gh:jesseduffield/lazygit:*linux_x86_64.tar.gz"
+    },
+    {
       "key": "expo",
       "category": "Frameworks",
       "default": false,
-      "supported_clis": ["*"],
-      "description": "Expo — managed React Native workflow",
+      "description": "Expo — create-expo-app scaffolder for React Native apps",
       "dependencies": ["node"],
-      "install": "npm:expo-cli"
+      "install": "npm:create-expo-app"
     },
     {
       "key": "flutter",
       "category": "Frameworks",
       "default": false,
-      "supported_clis": ["*"],
       "description": "Flutter — Dart cross-platform mobile + web",
       "install": "git:https://github.com/flutter/flutter.git:$HOME/.flutter"
     },
@@ -251,72 +235,142 @@
       "key": "react",
       "category": "Frameworks",
       "default": false,
-      "supported_clis": ["*"],
-      "description": "React — Vite + create-react-app scaffolders",
+      "description": "React — Vite scaffolder (create-react-app is archived; use Vite)",
       "dependencies": ["node"],
-      "install": "npm:vite create-react-app"
+      "install": "npm:vite"
     },
     {
       "key": "react-native",
       "category": "Frameworks",
       "default": false,
-      "supported_clis": ["*"],
-      "description": "React Native CLI — cross-platform mobile",
+      "description": "React Native — @react-native-community/cli for native bootstrap",
       "dependencies": ["node"],
-      "install": "npm:react-native"
+      "install": "npm:@react-native-community/cli"
     },
     {
       "key": "svelte",
       "category": "Frameworks",
       "default": false,
-      "supported_clis": ["*"],
       "description": "SvelteKit — sv CLI + project scaffolding",
       "dependencies": ["node"],
       "install": "npm:sv"
     },
     {
-      "key": "lazygit",
-      "category": "Tools",
+      "key": "tmux",
+      "category": "Shell Tools",
       "default": false,
-      "supported_clis": ["*"],
-      "description": "Git TUI — visual branch / diff navigation",
-      "install": "gh:jesseduffield/lazygit:*linux_x86_64.tar.gz"
+      "description": "tmux — terminal multiplexer (panes, windows, sessions)",
+      "install": "apt:tmux"
     },
     {
-      "key": "spec-kit",
-      "category": "Tools",
+      "key": "zellij",
+      "category": "Shell Tools",
       "default": false,
-      "supported_clis": ["*"],
-      "description": "GitHub spec-kit — spec-driven dev workflow (specify CLI)",
-      "dependencies": ["uv"],
-      "install": "uv:specify-cli@git+https://github.com/github/spec-kit.git"
+      "description": "Zellij — Rust terminal multiplexer with a modern UI",
+      "install": "gh:zellij-org/zellij:*x86_64-unknown-linux-musl.tar.gz"
     },
     {
-      "key": "rtk",
-      "category": "AI Tools",
-      "default": true,
-      "supported_clis": ["*"],
-      "description": "RTK — token-saver CLI proxy (rewrites ls/grep/git for AI)",
-      "install": "curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh && rtk init -g --auto-patch </dev/null 2>/dev/null || true",
+      "key": "fzf",
+      "category": "Shell Tools",
+      "default": false,
+      "description": "fzf — fuzzy finder for files, history, processes",
+      "install": "apt:fzf"
+    },
+    {
+      "key": "ripgrep",
+      "category": "Shell Tools",
+      "default": false,
+      "description": "ripgrep (rg) — fast recursive grep, honors .gitignore",
+      "install": "apt:ripgrep"
+    },
+    {
+      "key": "bat",
+      "category": "Shell Tools",
+      "default": false,
+      "description": "bat — cat clone with syntax highlighting (linked as 'bat'; Debian ships as 'batcat')",
+      "install": "apt:bat",
       "post_install": [
-        "HOOK='{\"matcher\":\"Bash\",\"hooks\":[{\"type\":\"command\",\"command\":\"rtk hook claude\"}]}'; mkdir -p \"$HOME/.claude\"; SETTINGS=\"$HOME/.claude/settings.json\"; [ -f \"$SETTINGS\" ] || echo '{}' > \"$SETTINGS\"; jq --argjson h \"$HOOK\" '.hooks.PreToolUse = ((.hooks.PreToolUse // []) | if any(.[]; .matcher==$h.matcher and ((.hooks // []) | any(.command==$h.hooks[0].command))) then . else . + [$h] end)' \"$SETTINGS\" > \"$SETTINGS.new\" && mv \"$SETTINGS.new\" \"$SETTINGS\""
+        "mkdir -p \"$HOME/.local/bin\" && ln -sf /usr/bin/batcat \"$HOME/.local/bin/bat\""
       ]
+    },
+    {
+      "key": "eza",
+      "category": "Shell Tools",
+      "default": false,
+      "description": "eza — modern ls replacement with git integration and tree view",
+      "install": "gh:eza-community/eza:*eza_x86_64-unknown-linux-musl.tar.gz"
+    },
+    {
+      "key": "zoxide",
+      "category": "Shell Tools",
+      "default": false,
+      "description": "zoxide — smarter cd that learns frequently-used directories",
+      "install": "apt:zoxide"
     }
   ],
   "plugins": [
     {
-      "key": "caveman",
-      "category": "Claude Code Plugins",
+      "key": "spec-kit",
+      "category": "SDD / Orchestration",
       "default": false,
-      "supported_clis": ["claude"],
+      "description": "GitHub spec-kit — spec-driven dev workflow (specify CLI). Greenfield-focused; v0.8+, 90k+ stars.",
+      "dependencies": ["uv"],
+      "install": "uv:specify-cli@git+https://github.com/github/spec-kit.git"
+    },
+    {
+      "key": "openspec",
+      "category": "SDD / Orchestration",
+      "default": false,
+      "description": "OpenSpec — spec-driven dev for brownfield projects with delta tracking (Fission-AI).",
+      "dependencies": ["node"],
+      "install": "npm:@fission-ai/openspec"
+    },
+    {
+      "key": "amux",
+      "category": "SDD / Orchestration",
+      "default": false,
+      "description": "amux — TUI for running multiple coding agents in parallel (tmux-style multiplexer; multi-CLI)",
+      "dependencies": ["tmux"],
+      "install": "gh:andyrewlee/amux:*linux_amd64.tar.gz"
+    },
+    {
+      "key": "dex",
+      "category": "SDD / Orchestration",
+      "default": false,
+      "description": "dex — structured Ralph-loop orchestrator; plans/implements/reviews via your preferred coding CLI",
+      "install": "gh:francescoalemanno/dex:*linux_amd64.tar.gz"
+    },
+    {
+      "key": "plandex",
+      "category": "SDD / Orchestration",
+      "default": false,
+      "description": "plandex — open-source AI coding agent for large projects (multi-step plans, branching, sandboxed)",
+      "install": "gh:plandex-ai/plandex:*linux_amd64.tar.gz"
+    },
+    {
+      "key": "rtk",
+      "category": "Coding CLI Plugins",
+      "default": true,
+      "condition": "${CODING_CLI} == 'claude'",
+      "description": "RTK — token-saver CLI proxy (rewrites ls/grep/git for AI; wired into Claude's PreToolUse hook)",
+      "install": "curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh && rtk init -g --auto-patch </dev/null 2>/dev/null || true",
+      "post_install": [
+        "HOOK='{\"matcher\":\"Bash\",\"hooks\":[{\"type\":\"command\",\"command\":\"rtk hook claude\"}]}'; mkdir -p \"$HOME/.claude\"; SETTINGS=\"$HOME/.claude/settings.json\"; [ -f \"$SETTINGS\" ] || echo '{}' > \"$SETTINGS\"; jq --argjson h \"$HOOK\" '.hooks.PreToolUse = ((.hooks.PreToolUse // []) | if any(.[]; .matcher==$h.matcher and ((.hooks // []) | any(.command==$h.hooks[0].command))) then . else . + [$h] end)' \"$SETTINGS\" > \"$SETTINGS.new\" && mv \"$SETTINGS.new\" \"$SETTINGS\""
+      ]
+    },
+    {
+      "key": "caveman",
+      "category": "Coding CLI Plugins",
+      "default": false,
+      "condition": "${CODING_CLI} == 'claude'",
       "description": "Token saver — caveman-speak output (~70% fewer tokens)",
       "install": "marketplace:JuliusBrussee/caveman:caveman"
     },
     {
       "key": "ccstatusline",
-      "category": "Claude Code Plugins",
-      "default": false,
-      "supported_clis": ["claude"],
+      "category": "Coding CLI Plugins",
+      "default": true,
+      "condition": "${CODING_CLI} == 'claude'",
       "description": "Status bar token/cost overlay (ships with a curated default config — edit ~/.config/ccstatusline/settings.json inside the container to tweak)",
       "dependencies": ["node"],
       "install": "npm:ccstatusline",
@@ -326,97 +380,99 @@
     },
     {
       "key": "ccusage",
-      "category": "Claude Code Plugins",
+      "category": "Coding CLI Plugins",
       "default": false,
-      "supported_clis": ["claude"],
+      "condition": "${CODING_CLI} == 'claude'",
       "description": "Dashboard for session cost & token usage",
       "dependencies": ["node"],
       "install": "npm:ccusage"
     },
     {
       "key": "claude-hud",
-      "category": "Claude Code Plugins",
+      "category": "Coding CLI Plugins",
       "default": false,
-      "supported_clis": ["claude"],
+      "condition": "${CODING_CLI} == 'claude'",
       "description": "Live token / context overlay",
       "install": "marketplace:jarrodwatts/claude-hud:claude-hud"
     },
     {
       "key": "claude-mem",
-      "category": "Claude Code Plugins",
+      "category": "Coding CLI Plugins",
       "default": false,
-      "supported_clis": ["claude"],
+      "condition": "${CODING_CLI} == 'claude'",
       "description": "Auto-captures session activity for continuity",
       "install": "marketplace:thedotmack/claude-mem:claude-mem:thedotmack"
     },
     {
       "key": "context-mode",
-      "category": "Claude Code Plugins",
+      "category": "Coding CLI Plugins",
       "default": false,
-      "supported_clis": ["claude"],
+      "condition": "${CODING_CLI} == 'claude'",
       "description": "Sandboxes tool output (~98% context savings)",
       "install": "marketplace:mksglu/context-mode:context-mode"
     },
     {
       "key": "everything-claude-code",
-      "category": "Claude Code Plugins",
+      "category": "Coding CLI Plugins",
       "default": false,
-      "supported_clis": ["claude"],
+      "condition": "${CODING_CLI} == 'claude'",
       "description": "48 agents + 183 skills (large)",
       "install": "marketplace:affaan-m/everything-claude-code:ecc:ecc"
     },
     {
       "key": "karpathy-skills",
-      "category": "Claude Code Plugins",
+      "category": "Coding CLI Plugins",
       "default": false,
-      "supported_clis": ["claude"],
+      "condition": "${CODING_CLI} == 'claude'",
       "description": "Karpathy's 4 principles: think first, minimal code",
       "install": "marketplace:forrestchang/andrej-karpathy-skills:andrej-karpathy-skills:karpathy-skills"
     },
     {
-      "key": "gitnexus",
-      "category": "AI Memory & Knowledge",
-      "default": false,
-      "supported_clis": ["*"],
-      "description": "Code intelligence / knowledge graph engine (MCP server auto-wired)",
-      "dependencies": ["node"],
-      "install": "npm:gitnexus",
-      "post_install": [
-        "claude mcp remove gitnexus -s user 2>/dev/null; claude mcp add gitnexus -s user -- gitnexus mcp"
-      ]
-    },
-    {
       "key": "graphify",
-      "category": "AI Memory & Knowledge",
+      "category": "Memory & Knowledge",
       "default": false,
-      "supported_clis": ["*"],
       "description": "Codebase knowledge graph (safishamsi/graphify; PyPI: graphifyy)",
       "dependencies": ["uv"],
       "install": "uv:graphifyy",
       "post_install": [
-        "claude mcp remove graphify -s user 2>/dev/null; claude mcp add graphify -s user -- graphify --mcp"
+        "if command -v claude >/dev/null 2>&1; then claude mcp remove graphify -s user 2>/dev/null; claude mcp add graphify -s user -- graphify --mcp; else echo 'skip: claude CLI not installed; install graphify MCP later with: claude mcp add graphify -s user -- graphify --mcp'; fi"
       ]
     },
     {
       "key": "mempalace",
-      "category": "AI Memory & Knowledge",
+      "category": "Memory & Knowledge",
       "default": false,
-      "supported_clis": ["*"],
       "description": "Spatial AI memory indexed locally",
       "dependencies": ["uv"],
       "install": "uv:mempalace",
       "post_install": [
-        "claude mcp remove mempalace -s user 2>/dev/null; claude mcp add mempalace -s user -- mempalace-mcp"
+        "if command -v claude >/dev/null 2>&1; then claude mcp remove mempalace -s user 2>/dev/null; claude mcp add mempalace -s user -- mempalace-mcp; else echo 'skip: claude CLI not installed; install mempalace MCP later with: claude mcp add mempalace -s user -- mempalace-mcp'; fi"
       ]
     },
     {
       "key": "ruflo",
-      "category": "AI Orchestration",
+      "category": "SDD / Orchestration",
       "default": false,
-      "supported_clis": ["claude"],
+      "condition": "${CODING_CLI} == 'claude'",
       "description": "Ruflo — 100+ specialized agents, swarms, federated memory. For the full loop (MCP server + hooks), run `npx -y ruflo@latest init` inside the container in your workspace — note this writes .claude-flow/ and .claude/ files into CWD.",
       "dependencies": ["node"],
       "install": "marketplace:ruvnet/ruflo:ruflo-core:ruflo"
+    },
+    {
+      "key": "bmad-method",
+      "category": "SDD / Orchestration",
+      "default": false,
+      "description": "BMAD Method — agile AI-driven dev with 12+ specialized agents; invoke via `npx bmad-method install` in your workspace",
+      "dependencies": ["node"],
+      "install": "npm:bmad-method"
+    },
+    {
+      "key": "claude-squad",
+      "category": "SDD / Orchestration",
+      "default": false,
+      "description": "Claude Squad — manage multiple Claude/Codex/Aider agents in parallel tmux panes (binary: cs)",
+      "dependencies": ["tmux"],
+      "install": "curl -fsSL https://raw.githubusercontent.com/smtg-ai/claude-squad/main/install.sh | bash"
     }
   ]
 }

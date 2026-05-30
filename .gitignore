@@ -1,37 +1,33 @@
-# Secrets — actual environment, never the template
+# Secrets / generated env (setup writes ~/.codetainyrrr/.env, never here)
 .env
 .env*
-!env.example
 
-# User-local catalog additions — gitignored, mounted into container by `codetainyrrr run`
-catalog.user.json
-
-# Default project mount (your code lives here, not the container's)
-workspace/
+# Engine binaries — local testing only, never committed. The release packages
+# the pinned insmaller binary renamed to `codetainyrrr`; CI/Docker fetch it.
+codetainyrrr
+codetainyrrr.exe
+codetainyrrr-linux
+insmaller
+insmaller.exe
+insmaller-*
 
 # OS detritus
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# Editor swap / backup files
+# Editor swap / backup
 *.swp
 *.swo
 *~
 .vscode/
 .idea/
 
-# Logs and temp
+# Logs / temp / archives
 *.log
 tmp/
 temp/
 *.tmp
-
-# Local build/test artifacts
 *.tgz
 *.tar.gz
-
-# Rust build output
-target/
-# Keep Cargo.lock for reproducible builds (binary crate)
-
+*.zip

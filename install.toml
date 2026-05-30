@@ -1,0 +1,116 @@
+# install.toml — codetainyrrr self-install recipe.
+#
+# Shipped at the BUNDLE ROOT (release.yml renames it to installer.toml so the
+# engine finds it next to the binary via exe-sibling discovery, insmaller
+# >=0.3.3). The runtime config lives under payload/ and is copied into the
+# install dir by [task.install]; once installed, the binary discovers that
+# runtime installer.toml because it sits beside the binary (exe-sibling), and
+# also via app-home discovery (P4) for the default location.
+#
+# Install dir: $CODETAINYRRR_HOME, default ~/.codetainyrrr. The binary and its
+# config are CO-LOCATED in that dir (no bin/ subdir) so discovery works for any
+# location, including a custom one like C:\temp\codetainyrrr.
+#
+# Usage from an extracted bundle, any cwd, no flags:
+#   ./codetainyrrr task install                              # -> ~/.codetainyrrr + PATH
+#   CODETAINYRRR_HOME=/opt/ct ./codetainyrrr task install    # custom dir (POSIX)
+#   $env:CODETAINYRRR_HOME='C:\ct'; .\codetainyrrr.exe task install   # custom (Windows)
+#   ./codetainyrrr task uninstall
+#
+# Uses builtin processors (copy/ensure_line/shell) + the engine-injected
+# {{ self_exe }} / {{ exe_dir }} task vars. No bespoke install script.
+
+[settings]
+sentinel_dir_name = "codetainyrrr"
+
+# ── stage-payload (internal): copy the bundled runtime config into the install dir ──
+# OS-agnostic: copy(src_dir, dest) drops payload/* directly under APP_HOME
+# (APP_HOME/{installer.toml,catalog.json,wizard.toml,plugins/}).
+[task.stage-payload]
+description = "Copy bundled config payload into the install dir (internal)"
+
+[[task.stage-payload.steps]]
+type = "copy"
+src  = "{{ exe_dir }}/payload"
+dest = "{{ CODETAINYRRR_HOME | default('~/.codetainyrrr') }}"
+
+# ── install ───────────────────────────────────────────────────────────────────
+# needs stage-payload (runs first). The binary copy is per-OS (filename differs:
+# .exe on Windows). POSIX `steps` is the default branch; `os.windows` replaces it.
+[task.install]
+description = "Install codetainyrrr to $CODETAINYRRR_HOME (default ~/.codetainyrrr) and add it to PATH"
+needs       = ["stage-payload"]
+
+# -- POSIX (linux/macos): binary beside config; symlink into ~/.local/bin --
+[[task.install.steps]]
+type = "copy"
+src  = "{{ self_exe }}"
+dest = "{{ CODETAINYRRR_HOME | default('~/.codetainyrrr') }}/codetainyrrr"
+
+[[task.install.steps]]
+type = "shell"
+script = '''
+APP_HOME="${CODETAINYRRR_HOME:-$HOME/.codetainyrrr}"
+chmod 755 "$APP_HOME/codetainyrrr"
+mkdir -p "$HOME/.local/bin"
+rm -f "$HOME/.local/bin/codetainyrrr"
+ln -s "$APP_HOME/codetainyrrr" "$HOME/.local/bin/codetainyrrr"
+'''
+
+[[task.install.steps]]
+type = "ensure_line"
+file = "~/.profile"
+line = 'export PATH="$HOME/.local/bin:$PATH"'
+
+[[task.install.steps]]
+type = "shell"
+script = '''
+APP_HOME="${CODETAINYRRR_HOME:-$HOME/.codetainyrrr}"
+echo "Installed to $APP_HOME. Open a new shell (or: source ~/.profile), then run: codetainyrrr setup"
+'''
+
+# -- Windows: binary beside config; add the install dir to the User PATH --
+[[task.install.os.windows]]
+type = "copy"
+src  = "{{ self_exe }}"
+dest = "{{ CODETAINYRRR_HOME | default('~/.codetainyrrr') }}/codetainyrrr.exe"
+
+[[task.install.os.windows]]
+type = "shell"
+script = '''
+$apphome = if ($env:CODETAINYRRR_HOME) { $env:CODETAINYRRR_HOME } else { Join-Path $env:USERPROFILE ".codetainyrrr" }
+$p = [Environment]::GetEnvironmentVariable("Path","User")
+if (-not $p) { $p = "" }
+if (($p -split ";") -notcontains $apphome) {
+  [Environment]::SetEnvironmentVariable("Path", ($p.TrimEnd(";") + ";" + $apphome), "User")
+  Write-Host "Added $apphome to User PATH. Open a new terminal, then run: codetainyrrr setup"
+} else {
+  Write-Host "PATH already has $apphome. Open a new terminal, then run: codetainyrrr setup"
+}
+'''
+
+# ── uninstall ──────────────────────────────────────────────────────────────────
+[task.uninstall]
+description = "Remove codetainyrrr (install dir + PATH entry)"
+
+[[task.uninstall.steps]]
+type = "shell"
+script = '''
+APP_HOME="${CODETAINYRRR_HOME:-$HOME/.codetainyrrr}"
+rm -f "$HOME/.local/bin/codetainyrrr"
+[ -n "$APP_HOME" ] && rm -rf "$APP_HOME"
+echo "Removed $APP_HOME and ~/.local/bin/codetainyrrr. The PATH line in ~/.profile is harmless; remove it manually if you like."
+'''
+
+[[task.uninstall.os.windows]]
+type = "shell"
+script = '''
+$apphome = if ($env:CODETAINYRRR_HOME) { $env:CODETAINYRRR_HOME } else { Join-Path $env:USERPROFILE ".codetainyrrr" }
+$p = [Environment]::GetEnvironmentVariable("Path","User")
+if ($p) {
+  $new = ($p -split ";" | Where-Object { $_ -ne $apphome -and $_ -ne "" }) -join ";"
+  [Environment]::SetEnvironmentVariable("Path", $new, "User")
+}
+if ($apphome) { Remove-Item -Recurse -Force $apphome -ErrorAction SilentlyContinue }
+Write-Host "Removed $apphome and its PATH entry."
+'''
