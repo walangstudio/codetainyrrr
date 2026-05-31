@@ -1,0 +1,322 @@
+name: Release
+
+# Builds per-platform bundles (codetainyrrr config + prebuilt insmaller binary)
+# and attaches them to a GitHub Release.
+#
+# Cross-repo download: walangstudio/insmaller is PUBLIC, so the workflow's
+# default GITHUB_TOKEN is enough to `gh release download` its assets — no
+# fine-grained PAT or org-owned secret needed. (If insmaller ever goes
+# private again, swap GITHUB_TOKEN for a PAT/App token with `contents:read`
+# on walangstudio/insmaller and re-add it as a repo secret.)
+#
+# Engine version: set the repo/environment variable INSMALLER_VERSION
+# (Settings → Variables → Actions) to pin a release, e.g. "v0.3.3".
+# workflow_dispatch exposes an override input for ad-hoc builds.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "codetainyrrr release tag (e.g. v0.3.0)"
+        required: true
+        type: string
+      branch:
+        description: "Branch to release from (default: main)"
+        required: false
+        default: "main"
+        type: string
+      insmaller_version:
+        description: "insmaller engine version override (e.g. v0.3.3)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  # Default engine version; override via repo variable INSMALLER_VERSION or
+  # the workflow_dispatch input above.
+  INSMALLER_VERSION_DEFAULT: "v0.5.1"
+
+jobs:
+  # ── Resolve the codetainyrrr tag once; push it when triggered manually ───
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      insmaller_version: ${{ steps.resolve.outputs.insmaller_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.branch || github.ref }}
+
+      - name: Resolve tag and engine version
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CT_TAG="${{ inputs.tag }}"
+          else
+            CT_TAG="${GITHUB_REF#refs/tags/}"
+          fi
+
+          # Engine version precedence: dispatch input > repo variable > default.
+          if [ -n "${{ inputs.insmaller_version }}" ]; then
+            ENG_VER="${{ inputs.insmaller_version }}"
+          elif [ -n "${{ vars.INSMALLER_VERSION }}" ]; then
+            ENG_VER="${{ vars.INSMALLER_VERSION }}"
+          else
+            ENG_VER="${INSMALLER_VERSION_DEFAULT}"
+          fi
+
+          echo "tag=${CT_TAG}"              >> "$GITHUB_OUTPUT"
+          echo "insmaller_version=${ENG_VER}" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          tag="${{ steps.resolve.outputs.tag }}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "Tag ${tag} already exists; skipping create."
+          else
+            git tag -a "${tag}" -m "Release ${tag}"
+            git push origin "${tag}"
+          fi
+          git checkout "${tag}"
+
+  # ── Download engine, assemble bundle, upload artifact ───────────────────
+  bundle:
+    name: Bundle ${{ matrix.target }}
+    needs: [prepare, image]   # image artifact (codetainyrrr-image.tar.gz) ships in every bundle's payload/
+    runs-on: ubuntu-latest   # all assembly runs on ubuntu; zip/tar available natively
+    strategy:
+      fail-fast: false
+      matrix:
+        # binary_name = name inside the upstream insmaller archive;
+        # bundled_name = product-renamed name shipped in the codetainyrrr
+        # bundle (insmaller is not forked — only the packaged file is renamed).
+        include:
+          - target: x86_64-unknown-linux-gnu
+            archive_ext: tar.gz
+            binary_name: insmaller
+            bundled_name: codetainyrrr
+
+          - target: aarch64-apple-darwin
+            archive_ext: tar.gz
+            binary_name: insmaller
+            bundled_name: codetainyrrr
+
+          - target: x86_64-apple-darwin
+            archive_ext: tar.gz
+            binary_name: insmaller
+            bundled_name: codetainyrrr
+
+          - target: x86_64-pc-windows-msvc
+            archive_ext: zip
+            binary_name: insmaller.exe
+            bundled_name: codetainyrrr.exe
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Install gh CLI (already present on ubuntu-latest, explicit pin)
+        run: gh --version
+
+      - name: Download insmaller asset + SHA256SUMS
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ENG_VER="${{ needs.prepare.outputs.insmaller_version }}"
+          TARGET="${{ matrix.target }}"
+          EXT="${{ matrix.archive_ext }}"
+          ASSET="insmaller-${ENG_VER}-${TARGET}.${EXT}"
+
+          mkdir -p engine_dl
+          gh release download "${ENG_VER}" \
+            --repo walangstudio/insmaller \
+            --pattern "${ASSET}" \
+            --pattern "SHA256SUMS" \
+            --dir engine_dl
+
+          echo "Downloaded:"
+          ls -lh engine_dl/
+
+      - name: Verify checksum
+        run: |
+          ENG_VER="${{ needs.prepare.outputs.insmaller_version }}"
+          TARGET="${{ matrix.target }}"
+          EXT="${{ matrix.archive_ext }}"
+          ASSET="insmaller-${ENG_VER}-${TARGET}.${EXT}"
+
+          cd engine_dl
+          # Filter SHA256SUMS to just the one entry we care about, then verify.
+          grep "${ASSET}" SHA256SUMS > checksum_single.txt
+          sha256sum -c checksum_single.txt
+          echo "Checksum OK: ${ASSET}"
+
+      - name: Extract insmaller binary
+        run: |
+          ENG_VER="${{ needs.prepare.outputs.insmaller_version }}"
+          TARGET="${{ matrix.target }}"
+          EXT="${{ matrix.archive_ext }}"
+          ASSET="insmaller-${ENG_VER}-${TARGET}.${EXT}"
+          BINARY="${{ matrix.binary_name }}"
+
+          mkdir -p engine_bin
+          if [ "${EXT}" = "tar.gz" ]; then
+            tar -xzf "engine_dl/${ASSET}" -C engine_bin "${BINARY}"
+          else
+            unzip -j "engine_dl/${ASSET}" "${BINARY}" -d engine_bin
+          fi
+
+          chmod +x "engine_bin/${BINARY}"
+          echo "Extracted: $(ls -lh engine_bin/)"
+
+      - name: Download prebuilt image tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: image-tarball
+          path: image_artifact
+
+      - name: Assemble bundle directory
+        run: |
+          CT_TAG="${{ needs.prepare.outputs.tag }}"
+          TARGET="${{ matrix.target }}"
+          BUNDLE_DIR="codetainyrrr-${CT_TAG}-${TARGET}"
+          BINARY="${{ matrix.binary_name }}"
+
+          mkdir -p "${BUNDLE_DIR}/payload"
+
+          # Engine binary, product-renamed (insmaller → codetainyrrr).
+          cp "engine_bin/${BINARY}" "${BUNDLE_DIR}/${{ matrix.bundled_name }}"
+
+          # Install recipe at the bundle root. Renamed to installer.toml so the
+          # engine (>=0.3.3) finds it next to the binary via exe-sibling
+          # discovery: `./codetainyrrr task install` works from any cwd, no flag.
+          cp install.toml "${BUNDLE_DIR}/installer.toml"
+
+          # Runtime config under payload/ — copied to ~/.codetainyrrr by
+          # `task install`; the installed binary then discovers it via app-home
+          # discovery (P4). Kept separate from the install recipe above.
+          cp installer.toml "${BUNDLE_DIR}/payload/installer.toml"
+          cp catalog.json   "${BUNDLE_DIR}/payload/"
+          cp wizard.toml    "${BUNDLE_DIR}/payload/"
+          cp -r plugins/    "${BUNDLE_DIR}/payload/plugins/"
+
+          # Prebuilt config-only image (docker save). task.install copies it into
+          # the install dir; task.build `docker load`s it on first run. Same linux
+          # image in every platform bundle (runs via Docker Desktop on win/mac).
+          cp image_artifact/codetainyrrr-image.tar.gz "${BUNDLE_DIR}/payload/"
+
+          # Docs at the bundle root.
+          cp README.md "${BUNDLE_DIR}/"
+          cp LICENSE   "${BUNDLE_DIR}/"
+
+          echo "Bundle contents:"
+          ls -lhR "${BUNDLE_DIR}/"
+
+      - name: Archive bundle
+        run: |
+          CT_TAG="${{ needs.prepare.outputs.tag }}"
+          TARGET="${{ matrix.target }}"
+          EXT="${{ matrix.archive_ext }}"
+          BUNDLE_DIR="codetainyrrr-${CT_TAG}-${TARGET}"
+
+          mkdir -p dist
+
+          if [ "${EXT}" = "tar.gz" ]; then
+            tar -czf "dist/${BUNDLE_DIR}.tar.gz" "${BUNDLE_DIR}"
+          else
+            zip -r "dist/${BUNDLE_DIR}.zip" "${BUNDLE_DIR}"
+          fi
+
+          echo "Archive:"
+          ls -lh dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.target }}
+          path: dist/*
+
+  # ── Build the config-only Linux image (engine fetched from the insmaller
+  #    release, same provenance as the bundles) and ship it as a loadable
+  #    `docker save` tarball release asset (no registry assumption). ────────
+  image:
+    name: Build config-only image
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Download + verify + extract linux insmaller engine
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ENG_VER="${{ needs.prepare.outputs.insmaller_version }}"
+          ASSET="insmaller-${ENG_VER}-x86_64-unknown-linux-gnu.tar.gz"
+          mkdir -p engine_dl
+          gh release download "${ENG_VER}" \
+            --repo walangstudio/insmaller \
+            --pattern "${ASSET}" --pattern "SHA256SUMS" \
+            --dir engine_dl
+          ( cd engine_dl && grep "${ASSET}" SHA256SUMS > one.txt && sha256sum -c one.txt )
+          tar -xzf "engine_dl/${ASSET}" -C . insmaller
+          mv insmaller codetainyrrr-linux
+          chmod +x codetainyrrr-linux
+
+      # Tag MUST match installer.toml [project.extra] image_tag, since task.build
+      # inspects/loads by that tag. Stable filename (no version) so the bundle
+      # step and task.build reference a fixed `codetainyrrr-image.tar.gz`.
+      - name: Build image
+        run: docker build -t codetainyrrr:local .
+
+      - name: Save image tarball
+        run: |
+          mkdir -p image_dist
+          docker save codetainyrrr:local | gzip > image_dist/codetainyrrr-image.tar.gz
+          ls -lh image_dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-tarball
+          path: image_dist/codetainyrrr-image.tar.gz
+
+  # ── Collect all bundles, generate top-level checksums, publish release ───
+  release:
+    name: Publish release
+    needs: [prepare, bundle]
+    runs-on: ubuntu-latest
+    steps:
+      # Only the per-platform bundles are published; the image ships inside each
+      # bundle's payload/, not as a standalone asset.
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: bundle-*
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: ${{ needs.prepare.outputs.tag }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/*

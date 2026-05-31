@@ -1,0 +1,33 @@
+# Secrets / generated env (setup writes ~/.codetainyrrr/.env, never here)
+.env
+.env*
+
+# Engine binaries — local testing only, never committed. The release packages
+# the pinned insmaller binary renamed to `codetainyrrr`; CI/Docker fetch it.
+codetainyrrr
+codetainyrrr.exe
+codetainyrrr-linux
+insmaller
+insmaller.exe
+insmaller-*
+
+# OS detritus
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor swap / backup
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Logs / temp / archives
+*.log
+tmp/
+temp/
+*.tmp
+*.tgz
+*.tar.gz
+*.zip

@@ -1,0 +1,17 @@
+# Force LF for shell scripts and Linux-bound files so Windows checkouts with
+# core.autocrlf=true don't corrupt the container entrypoint (the Linux base
+# image won't run a script with CRLF — env: 'bash\r': No such file or directory).
+*.sh    text eol=lf
+*.zsh   text eol=lf
+*.bash  text eol=lf
+Dockerfile text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.toml  text eol=lf
+scripts/zshrc          text eol=lf
+scripts/entrypoint.sh  text eol=lf
+
+# Windows-only files stay CRLF.
+*.ps1   text eol=crlf
+*.cmd   text eol=crlf
+*.bat   text eol=crlf

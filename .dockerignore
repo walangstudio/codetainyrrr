@@ -1,0 +1,18 @@
+.env
+.env*
+.git
+*.tgz
+*.tar.gz
+workspace/
+catalog.user.json
+
+# Rust build artefacts — Dockerfile builds the binary inside Docker
+target/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
