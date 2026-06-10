@@ -4,6 +4,40 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-06-10
+
+Engine pin bumped to insmaller **v0.13.0**.
+
+### Added
+
+- **Named, multiple containers.** `setup` now opens with a **new / edit** choice.
+  Each container has its own settings file (`~/.codetainyrrr/containers/<name>.env`)
+  and its own `<name>_ct_home` volume, so several coexist. Editing an existing
+  container lists them (wizard `files:` source) and prefills its saved settings
+  (`defaults_from_file`); saved API keys show as `(kept)` and are preserved
+  unless re-typed.
+- **`codetainyrrr task run <name>`** (and `stop`/`connect`/`reset <name>`) select
+  a container by name — a trailing token exposed to task scripts as `$CT_ARG`.
+  With no name, tasks resolve the most-recently-configured container, falling
+  back to the legacy single `~/.codetainyrrr/.env`.
+- **`codetainyrrr task list`** — shows every configured container with its CLI,
+  runtime, and live (running/stopped) status.
+- **Container-name validation** — the wizard enforces a filesystem/container-safe
+  slug (`^[a-z0-9][a-z0-9_-]{0,63}$`).
+
+### Changed
+
+- **`--version`** renders a styled about block (engine ≥0.13.0): violet→pink
+  gradient name, dimmed tagline, copyright · license, and a gray engine line.
+- The setup wizard gained a **Review page** as its final step (read-only summary
+  of every selection, secrets masked) and now **skips an empty API-keys page**
+  for keyless CLIs.
+
+### Compatibility
+
+- Existing single-container users are unaffected: the legacy
+  `~/.codetainyrrr/.env` is still read when no per-container file applies.
+
 ## [0.1.0] - 2026-05-31
 
 First release. codetainyrrr is a Docker sandbox for AI coding agents,
@@ -15,7 +49,8 @@ engine (pinned ≥0.5.1) packaged under the product name.
 - **Config-only repo.** `installer.toml` (settings, desugar rules, install
   recipes, per-OS `[task.*]` Docker lifecycle), `catalog.json` (9 CLIs + tools
   + plugins with `install`/`dependencies`/`requires_input`/`condition`),
-  `wizard.toml` (3-page setup: CLI selection → project paths → API keys),
+  `wizard.toml` (4-page setup: runtime selection → CLI selection → project
+  paths → API keys),
   `plugins/` (`sys-pkg` + `lang-pkg` recipe packs), `install.toml` (the
   self-install recipe).
 - **Supported CLIs (9, all end-to-end verified against the prebuilt image):**
@@ -25,20 +60,32 @@ engine (pinned ≥0.5.1) packaged under the product name.
   `CODETAINYRRR_HOME`) and wires `PATH` (symlink + `~/.profile` line on POSIX,
   User `PATH` entry on Windows). Re-running upgrades in place; `task uninstall`
   reverses it.
-- **`setup` writes config only** — never installs on the host. The 3-page
+- **`setup` writes config only** — never installs on the host. The 4-page
   wizard collects choices, writes `~/.codetainyrrr/.env` (mode `0600`), prints
-  the outro, and stops. CLI installation happens inside the container on the
-  next `task run`.
+  the outro, and — when stdout is a TTY — offers to launch right away
+  (`Run codetainyrrr now? [Y/n]`, default yes) via the engine's
+  `setup_then_task` hook (`--run`/`--no-run` force the choice; `--answers`
+  runs skip the prompt). CLI installation happens inside the container on that
+  `task run`.
 - **Container lifecycle as `[task.*]`** pipelines: `build` (inspect or
   `docker load` the bundled image tarball), `run` (build the `docker run` argv
-  as a bash array so spaces in paths don't word-split; primary project mounts
-  at `/workspace/workspace`, extras at `/workspace/<basename>`; workdir
-  defaults to `/workspace` when no project is selected), `stop`, `connect`
+  as a bash array so spaces in paths don't word-split; primary project and
+  extras both mount at `/workspace/<basename>`; workdir defaults to
+  `/workspace` when no project is selected), `stop`, `connect`
   (`docker exec` into the running container), `doctor` (Docker + image +
   container health), `reset` (interactive — type `RESET` to confirm via
   insmaller's `type = "input"` step; non-TTY automation falls back to
   `CODETAINYRRR_CONFIRM=RESET`), `wait-ready` (polls the entrypoint's
   ready-file).
+- **Runtime: Podman or Docker.** Auto-detects on `PATH` (podman → docker) or
+  pick explicitly via the wizard's runtime page / `CODETAINYRRR_RUNTIME`.
+  Rootless Podman gets `--userns=keep-id` so mounted files stay host-owned; on
+  a rootful machine (the auto-fallback when a rootless VM won't start) it drops
+  the flag and uses the host-uid gosu path like Docker. New
+  **`task install-runtime`** installs the engine via the host package manager
+  (winget/brew/apt) and, for Podman, runs machine init + the wsl.conf systemd
+  patch + a self-healing start (probe → orphan-proxy cleanup → retry → rootful
+  fallback) on Windows.
 - **Welcome banner on attach** auto-launches the chosen CLI; if it's still
   installing, the banner waits up to **30 min** (override with
   `CT_LAUNCH_WAIT_SECS`; `NO_AUTOLAUNCH=1` skips the banner entirely and
@@ -48,8 +95,8 @@ engine (pinned ≥0.5.1) packaged under the product name.
   (`/workspace`, `/home/dev`, `/etc/codetainyrrr`, `/tmp/...`) aren't mangled
   into Windows paths when `sh` execs native `docker.exe`.
 - **Prebuilt image** (`codetainyrrr:local`) ships in every release bundle as
-  `codetainyrrr-image.tar.gz`; the first `task run` `docker load`s it (no
-  local build).
+  `codetainyrrr-image.tar.gz`; the first `task run` loads it into the active
+  runtime (`docker load` / `podman load`) — no local build.
 - **`scripts/test-clis.sh`** — gated per-CLI end-to-end harness (`CT_E2E=1`).
   Per CLI it asserts (1) `setup --answers` is config-only (host-install
   regression guard) and (2) the CLI installs and is on `PATH` in a throwaway

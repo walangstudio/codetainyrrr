@@ -20,10 +20,15 @@ lifecycle, and all installs.
 
 ## Requirements
 
-- **Docker Desktop** (Linux / macOS / Windows).
+- **A container runtime** — either **Podman** (recommended; daemonless,
+  rootless, no licensing) or **Docker Desktop**. codetainyrrr auto-detects on
+  PATH and uses whichever is present. If neither is installed, run
+  `codetainyrrr task install-runtime` after extracting the bundle.
 - **Windows hosts** also need **Git for Windows** (provides `sh.exe` /
-  `bash.exe`). codetainyrrr's task layer is POSIX shell driving `docker.exe`,
+  `bash.exe`). codetainyrrr's task layer is POSIX shell driving the runtime,
   so each `os.windows` step wraps the body in `powershell → sh <tempfile>`.
+  (`task install-runtime` is native PowerShell on Windows and does not need
+  `sh.exe` — useful for first-time setup before Git Bash is installed.)
 
 ## Quick start
 
@@ -66,13 +71,48 @@ run` `docker load`s it (no local build).
 ## Day-to-day
 
 ```sh
-codetainyrrr task run        # start (or attach if already running)
-codetainyrrr task connect    # open another shell in the running container
-codetainyrrr task stop       # stop it
-codetainyrrr task doctor     # docker + image + container health
-codetainyrrr task reset      # stop and wipe the home volume (prompts: type RESET to confirm; CODETAINYRRR_CONFIRM=RESET for non-TTY)
-codetainyrrr setup           # re-run the wizard to change selections
+codetainyrrr task run              # start (or attach if already running)
+codetainyrrr task connect          # open another shell in the running container
+codetainyrrr task stop             # stop it
+codetainyrrr task doctor           # runtime + image + container health
+codetainyrrr task reset            # stop and wipe the home volume (prompts: type RESET to confirm; CODETAINYRRR_CONFIRM=RESET for non-TTY)
+codetainyrrr task install-runtime  # install podman (or docker) via the host package manager
+codetainyrrr setup                 # re-run the wizard to change selections
 ```
+
+## Runtime selection (Podman or Docker)
+
+`codetainyrrr` runs on either Podman or Docker. The wizard's first page lets
+you pick — default `auto` resolves at run time by probing PATH (podman → docker
+→ fail). Override per-shell with `CODETAINYRRR_RUNTIME=podman` (or `docker`).
+
+| Host    | Podman one-liner                            | Docker one-liner                         |
+|---------|---------------------------------------------|------------------------------------------|
+| Linux   | `sudo apt install podman` (or distro pkg)   | follow https://docs.docker.com/engine/install/ |
+| macOS   | `brew install podman && podman machine init && podman machine start` | `brew install --cask docker`            |
+| Windows | `winget install RedHat.Podman` then `podman machine init && podman machine start` | `winget install Docker.DockerDesktop` |
+
+Or run `codetainyrrr task install-runtime` and answer the prompt.
+
+Podman and Docker can be installed side-by-side. They use separate image
+stores and WSL distros, so loading the codetainyrrr image into one does not
+populate the other — `task build` reloads the bundled tarball into whichever
+runtime is currently active.
+
+Podman rootless note: codetainyrrr passes `--userns=keep-id` so files written
+inside the container (in mounted workspaces) stay owned by your host user.
+Without it, rootless Podman would map container uid 1000 to a high subuid on
+the host. No action needed — `task run` adds the flag automatically when
+`$RUNTIME` is `podman`.
+
+Podman on Windows + Docker Desktop coexistence: if you have Docker Desktop
+installed and `podman machine start` hangs at "machine did not transition into
+running state: ssh error", the rootless user-mode networking is colliding with
+Docker Desktop's WSL distros. Switch podman to rootful and the host SSH port
+conflict resolves: `podman machine stop; podman machine set --rootful; podman
+machine start`. `task install-runtime` runs the full init (machine create +
+wsl.conf systemd patch + start) automatically; this caveat applies if you
+hit the upstream rootless/Docker-Desktop conflict.
 
 Re-running `setup` rewrites `~/.codetainyrrr/.env`; the next `task run` picks
 it up.

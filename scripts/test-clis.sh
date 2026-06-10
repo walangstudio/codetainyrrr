@@ -14,6 +14,8 @@
 #   CT_IMAGE     container image (default: codetainyrrr:local)
 #   CT_CLIS      space-separated CLIs to test (default: "claude codex gemini")
 #   CT_TIMEOUT   per-CLI container timeout in seconds (default: 1800)
+#   CT_RUNTIME   container runtime: docker | podman | auto (default: auto;
+#                auto = prefer podman if installed, else docker)
 #
 # Heads-up: these CLIs download real, large artifacts inside the container.
 # `claude` pulls a ~240 MB binary from downloads.claude.ai; `codex`/`gemini`
@@ -49,20 +51,34 @@ CT_IMAGE="${CT_IMAGE:-codetainyrrr:local}"
 CT_CLIS="${CT_CLIS:-claude codex gemini}"
 CT_TIMEOUT="${CT_TIMEOUT:-1800}"
 CT_BIN="${CT_BIN:-codetainyrrr}"
+CT_RUNTIME="${CT_RUNTIME:-auto}"
 
 if [ "${CT_E2E:-}" != "1" ]; then
     cat <<EOF
 test-clis.sh is gated. To run the full per-CLI container suite:
   CT_E2E=1 scripts/test-clis.sh
 Optional: CT_CLIS="claude" CT_IMAGE=codetainyrrr:local CT_BIN=/path/to/codetainyrrr
+         CT_RUNTIME=podman   (or docker; default: auto-detect)
 Skipping (exit 0).
 EOF
     exit 0
 fi
 
-command -v docker >/dev/null || { echo "FATAL: docker not on PATH"; exit 2; }
-docker image inspect "$CT_IMAGE" >/dev/null 2>&1 \
-    || { echo "FATAL: image '$CT_IMAGE' not found (run 'codetainyrrr task build' or 'docker load')"; exit 2; }
+# Resolve $RUNTIME: explicit > auto-detect (podman → docker).
+if [ "$CT_RUNTIME" = "auto" ] || [ -z "$CT_RUNTIME" ]; then
+    if command -v podman >/dev/null 2>&1; then RUNTIME=podman
+    elif command -v docker >/dev/null 2>&1; then RUNTIME=docker
+    else echo "FATAL: neither podman nor docker on PATH"; exit 2
+    fi
+else
+    RUNTIME="$CT_RUNTIME"
+    command -v "$RUNTIME" >/dev/null \
+        || { echo "FATAL: CT_RUNTIME=$RUNTIME but '$RUNTIME' not on PATH"; exit 2; }
+fi
+echo "runtime: $RUNTIME ($("$RUNTIME" --version 2>&1 | head -1))"
+
+"$RUNTIME" image inspect "$CT_IMAGE" >/dev/null 2>&1 \
+    || { echo "FATAL: image '$CT_IMAGE' not found in $RUNTIME (run 'codetainyrrr task build' or '$RUNTIME load -i <tarball>')"; exit 2; }
 
 # Command name a CLI provides (provides_command in catalog.json). Override-free
 # default to the key; only list keys whose command differs or needs pinning.
@@ -120,9 +136,13 @@ check_container_lands() {
     # at /etc/codetainyrrr/* so the test exercises the current source, not the
     # snapshot baked into the image. Mirrors task.run's live-edit override.
     # MSYS_NO_PATHCONV / MSYS2_ARG_CONV_EXCL stop Git-Bash from mangling the
-    # container-side /etc paths into Windows paths when sh execs docker.exe.
+    # container-side /etc paths into Windows paths when sh execs the runtime.exe.
     export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
-    out="$(with_timeout docker run --rm -e "CODING_CLI=$cli" -e NO_AUTOLAUNCH=1 \
+    # Podman rootless: --userns=keep-id maps container uid 1000 to host user so
+    # bind-mounted files stay correctly owned (mirrors task.run behaviour).
+    local userns=()
+    [ "$RUNTIME" = "podman" ] && userns=(--userns=keep-id)
+    out="$(with_timeout "$RUNTIME" run --rm "${userns[@]}" -e "CODING_CLI=$cli" -e NO_AUTOLAUNCH=1 \
         -v "$REPO_ROOT/catalog.json:/etc/codetainyrrr/catalog.json:ro" \
         -v "$REPO_ROOT/installer.toml:/etc/codetainyrrr/installer.toml:ro" \
         "$CT_IMAGE" \
@@ -141,7 +161,7 @@ check_container_lands() {
 }
 
 echo "== codetainyrrr per-CLI E2E =="
-echo "image=$CT_IMAGE clis='$CT_CLIS' timeout=${CT_TIMEOUT}s"
+echo "runtime=$RUNTIME image=$CT_IMAGE clis='$CT_CLIS' timeout=${CT_TIMEOUT}s"
 echo
 
 declare -a RESULTS

@@ -39,7 +39,7 @@ permissions:
 env:
   # Default engine version; override via repo variable INSMALLER_VERSION or
   # the workflow_dispatch input above.
-  INSMALLER_VERSION_DEFAULT: "v0.5.1"
+  INSMALLER_VERSION_DEFAULT: "v0.13.0"
 
 jobs:
   # ── Resolve the codetainyrrr tag once; push it when triggered manually ───

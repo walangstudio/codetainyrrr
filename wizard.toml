@@ -1,13 +1,45 @@
-# codetainyrrr setup wizard (insmaller wizard schema).
-# Pages run in order; `selected.inputs` unions requires_input of entries
-# selected on earlier pages, so the keys page follows the CLI page.
+# codetainyrrr setup wizard (insmaller wizard schema; needs engine >= 0.13.0).
 #
-# Coding-CLI-focused flow: pick the CLI, point at a project, drop in the key.
-# Dev tools, plugins, git identity, claude-settings sync, and custom configs
-# are archived on the feat/config-only-insmaller branch — re-add a page here to
-# bring any of them back. The container still honours INSTALL_TOOLS /
-# INSTALL_PLUGINS / GIT_AUTHOR_* / CLAUDE_DIR / *_CONFIG from .env if set, so
-# nothing in the task pipeline breaks when those vars are simply absent.
+# Front door: create a NEW container or EDIT an existing one. Edit lists the
+# containers under ~/.codetainyrrr/containers/ (one <name>.env per container)
+# and prefills the picked container's saved settings (defaults_from_file in
+# installer.toml); secrets show as "(kept)" and are preserved unless re-typed.
+# Each container gets its own <name>_ct_home volume + <name>.env, so several
+# coexist. `codetainyrrr task run <name>` starts a specific one.
+#
+# Dev tools, plugins, git identity, and custom configs are archived on the
+# feat/config-only-insmaller branch; the container still honours INSTALL_TOOLS /
+# INSTALL_PLUGINS / GIT_AUTHOR_* / CLAUDE_DIR / *_CONFIG from .env when present.
+
+[[page]]
+id = "mode"
+title = "Setup"
+description = "Create a new container, or edit an existing one's settings. Edit needs at least one container already set up."
+[[page.field]]
+id = "CT_MODE"
+type = "single_select"
+options = ["new", "edit"]
+default = "new"
+
+[[page]]
+id = "pick"
+title = "Select Container"
+description = "Pick the container to edit; its saved settings prefill the next pages. (Empty list = none configured yet — go back and choose 'new'.)"
+condition = "${CT_MODE} == 'edit'"
+[[page.field]]
+id = "CONTAINER_NAME"
+type = "single_select"
+source = "files:~/.codetainyrrr/containers/*.env"
+
+[[page]]
+id = "runtime"
+title = "Container Runtime"
+description = "Which container engine to use. Podman is recommended (daemonless, no licensing); Docker also supported. Pick 'auto' to let codetainyrrr detect at run time (prefers podman, falls back to docker). If neither is installed: run 'codetainyrrr task install-runtime' after setup."
+[[page.field]]
+id = "CODETAINYRRR_RUNTIME"
+type = "single_select"
+options = ["auto", "podman", "docker"]
+default = "auto"
 
 [[page]]
 id = "cli"
@@ -18,11 +50,17 @@ id = "CODING_CLI"
 type = "single_select"
 source = "catalog.clis"
 default = "claude"
+# New containers name themselves here; on edit the name was chosen on the pick
+# page, so this field is hidden. The name is also the volume + settings-file
+# name, so it is validated to a filesystem/container-safe slug.
 [[page.field]]
 id = "CONTAINER_NAME"
 type = "text"
-prompt = "Container name (shown in docker ps):"
+condition = "${CT_MODE} == 'new'"
+prompt = "Container name (also the volume + settings-file name):"
 default = "codetainyrrr"
+pattern = "^[a-z0-9][a-z0-9_-]{0,63}$"
+error = "Lowercase letters, digits, hyphen or underscore; must start alphanumeric; 1-64 chars."
 
 [[page]]
 id = "paths"
@@ -44,8 +82,14 @@ required = false
 [[page]]
 id = "api_keys"
 title = "API Keys"
-description = "Keys for the selected CLI(s) only. Stored in your local .env, never sent anywhere. Blank = keep existing or use OAuth."
+description = "Keys for the selected CLI(s) only. Stored in this container's local .env, never sent anywhere. Blank = keep existing or use OAuth. On edit, a saved key shows as (kept) — leave it to keep, retype to change."
 [[page.field]]
 id = "_api_keys"
 type = "text"
 source = "selected.inputs"
+
+[[page]]
+id = "review"
+title = "Review"
+description = "Confirm your selections, or ← to go back and change them."
+review = true
