@@ -6,10 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.2.0] - 2026-06-10
 
-Engine pin bumped to insmaller **v0.13.0**.
+Engine pin bumped to insmaller **v0.14.0**.
 
 ### Added
 
+- **Switching a container's CLI/tools now uninstalls the removed ones.** On
+  start, the container reconciles the desired set (`CODING_CLI` + `INSTALL_TOOLS`
+  + `INSTALL_PLUGINS`) against what is installed (engine sentinels in the home
+  volume) and uninstalls anything dropped before installing what's new — so
+  editing a container from kilo to gemini removes kilo. Every catalog entry has
+  a working uninstall (recipe-based, or a per-entry `uninstall` for curl-script
+  installs via engine v0.14.0).
 - **Named, multiple containers.** `setup` now opens with a **new / edit** choice.
   Each container has its own settings file (`~/.codetainyrrr/containers/<name>.env`)
   and its own `<name>_ct_home` volume, so several coexist. Editing an existing

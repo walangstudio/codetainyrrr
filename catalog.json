@@ -19,7 +19,8 @@
         { "id": "ANTHROPIC_API_KEY", "type": "secret", "required": false }
       ],
       "provides_command": "claude",
-      "install": "curl -fsSL https://claude.ai/install.sh | bash"
+      "install": "curl -fsSL https://claude.ai/install.sh | bash",
+      "uninstall": "rm -f \"$HOME/.local/bin/claude\""
     },
     {
       "key": "cn",
@@ -56,7 +57,8 @@
       "name": "Goose",
       "description": "Block's AI developer agent",
       "provides_command": "goose",
-      "install": "bash -c 'cd $HOME && curl -fsSL https://github.com/block/goose/releases/download/stable/download_cli.sh | CONFIGURE=false bash'"
+      "install": "bash -c 'cd $HOME && curl -fsSL https://github.com/block/goose/releases/download/stable/download_cli.sh | CONFIGURE=false bash'",
+      "uninstall": "rm -f \"$HOME/.local/bin/goose\""
     },
     {
       "key": "kilo",
@@ -71,7 +73,8 @@
       "name": "OpenCode",
       "description": "OpenCode AI",
       "provides_command": "opencode",
-      "install": "curl -fsSL https://opencode.ai/install | bash"
+      "install": "curl -fsSL https://opencode.ai/install | bash",
+      "uninstall": "rm -f \"$HOME/.local/bin/opencode\""
     },
     {
       "key": "pi",
@@ -91,7 +94,8 @@
       "category": "Coding Tools",
       "default": false,
       "description": "Fast all-in-one JS runtime + bundler + pkg mgr",
-      "install": "curl -fsSL https://bun.sh/install | bash"
+      "install": "curl -fsSL https://bun.sh/install | bash",
+      "uninstall": "rm -rf \"$HOME/.bun\" && rm -f \"$HOME/.local/bin/bun\" \"$HOME/.local/bin/bunx\""
     },
     {
       "key": "cpp",
@@ -105,14 +109,16 @@
       "category": "Coding Tools",
       "default": false,
       "description": "Secure TypeScript runtime — no node_modules",
-      "install": "curl -fsSL https://deno.land/install.sh | sh -s -- -y"
+      "install": "curl -fsSL https://deno.land/install.sh | sh -s -- -y",
+      "uninstall": "rm -rf \"$HOME/.deno\""
     },
     {
       "key": "dotnet",
       "category": "Coding Tools",
       "default": false,
       "description": "C#/F# — .NET SDK LTS",
-      "install": "curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel LTS --install-dir $HOME/.dotnet"
+      "install": "curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel LTS --install-dir $HOME/.dotnet",
+      "uninstall": "rm -rf \"$HOME/.dotnet\""
     },
     {
       "key": "go",
@@ -162,7 +168,8 @@
       "category": "Coding Tools",
       "default": false,
       "description": "Rust via rustup — systems / WASM (includes cargo)",
-      "install": "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path"
+      "install": "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path",
+      "uninstall": "if command -v rustup >/dev/null 2>&1; then rustup self uninstall -y; else rm -rf \"$HOME/.cargo\" \"$HOME/.rustup\"; fi"
     },
     {
       "key": "ts",
@@ -192,14 +199,16 @@
       "category": "Coding Tools",
       "default": false,
       "description": "SDKMAN — version manager for JVM ecosystem (java, kotlin, scala, gradle, maven)",
-      "install": "[ ! -f \"$HOME/.sdkman/bin/sdkman-init.sh\" ] && rm -rf \"$HOME/.sdkman\"; curl -s https://get.sdkman.io | bash"
+      "install": "[ ! -f \"$HOME/.sdkman/bin/sdkman-init.sh\" ] && rm -rf \"$HOME/.sdkman\"; curl -s https://get.sdkman.io | bash",
+      "uninstall": "rm -rf \"$HOME/.sdkman\""
     },
     {
       "key": "uv",
       "category": "Coding Tools",
       "default": false,
       "description": "uv — fast Python package manager & tool runner (Astral)",
-      "install": "curl -LsSf https://astral.sh/uv/install.sh | sh"
+      "install": "curl -LsSf https://astral.sh/uv/install.sh | sh",
+      "uninstall": "rm -f \"$HOME/.local/bin/uv\" \"$HOME/.local/bin/uvx\""
     },
     {
       "key": "yarn",
@@ -354,6 +363,7 @@
       "condition": "${CODING_CLI} == 'claude'",
       "description": "RTK — token-saver CLI proxy (rewrites ls/grep/git for AI; wired into Claude's PreToolUse hook)",
       "install": "curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh && rtk init -g --auto-patch </dev/null 2>/dev/null || true",
+      "uninstall": "rm -f \"$HOME/.local/bin/rtk\"",
       "post_install": [
         "HOOK='{\"matcher\":\"Bash\",\"hooks\":[{\"type\":\"command\",\"command\":\"rtk hook claude\"}]}'; mkdir -p \"$HOME/.claude\"; SETTINGS=\"$HOME/.claude/settings.json\"; [ -f \"$SETTINGS\" ] || echo '{}' > \"$SETTINGS\"; jq --argjson h \"$HOOK\" '.hooks.PreToolUse = ((.hooks.PreToolUse // []) | if any(.[]; .matcher==$h.matcher and ((.hooks // []) | any(.command==$h.hooks[0].command))) then . else . + [$h] end)' \"$SETTINGS\" > \"$SETTINGS.new\" && mv \"$SETTINGS.new\" \"$SETTINGS\""
       ]
@@ -472,7 +482,8 @@
       "default": false,
       "description": "Claude Squad — manage multiple Claude/Codex/Aider agents in parallel tmux panes (binary: cs)",
       "dependencies": ["tmux"],
-      "install": "curl -fsSL https://raw.githubusercontent.com/smtg-ai/claude-squad/main/install.sh | bash"
+      "install": "curl -fsSL https://raw.githubusercontent.com/smtg-ai/claude-squad/main/install.sh | bash",
+      "uninstall": "rm -f \"$HOME/.local/bin/cs\""
     }
   ]
 }

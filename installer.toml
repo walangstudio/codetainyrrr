@@ -221,6 +221,15 @@ fi
 . "$SDKMAN_DIR/bin/sdkman-init.sh"
 sdk install {{ arg }}
 """
+[[recipe.uninstall]]
+type   = "shell"
+script = """
+export SDKMAN_DIR="$HOME/.sdkman"
+[ -f "$SDKMAN_DIR/bin/sdkman-init.sh" ] || { echo "sdkman not installed; skipping" >&2; exit 0; }
+. "$SDKMAN_DIR/bin/sdkman-init.sh"
+_ver="$(sdk current {{ arg }} 2>/dev/null | awk '{print $NF}')"
+[ -n "$_ver" ] && sdk uninstall {{ arg }} "$_ver" < /dev/null || true
+"""
 
 [[recipe]]
 name = "corepack-prepare"
@@ -228,12 +237,31 @@ name = "corepack-prepare"
 type    = "exec"
 program = "corepack"
 argline = "prepare {{ arg }}@latest --activate"
+[[recipe.uninstall]]
+type    = "exec"
+program = "corepack"
+argline = "disable {{ arg }}"
 
 [[recipe]]
 name = "go-toolchain"
 [[recipe.install]]
 type        = "shell"
 script_file = "recipes/go-toolchain.sh"
+[[recipe.uninstall]]
+type   = "shell"
+script = """
+# Remove the Go SDK directory that the go-toolchain recipe installs.
+# The official install script puts the SDK under $HOME/go/sdk/go<version>
+# (per path_globs entry "~/go/sdk/bin" in [settings]) and symlinks the
+# active toolchain to $HOME/go.  Remove all versioned SDK dirs + the
+# top-level go/ tree.  Does NOT remove user project files; $GOPATH/src
+# and $GOPATH/pkg/mod are left untouched.
+rm -rf "$HOME/go/sdk"
+rm -rf "$HOME/go/bin"
+rm -rf "$HOME/go/pkg/tool"
+# Remove the go/go<version> root if it matches the sdk pattern (no user data there).
+find "$HOME/go" -maxdepth 1 -name 'go[0-9]*' -type d -exec rm -rf {} + 2>/dev/null || true
+"""
 
 [[recipe]]
 name = "python-tools"

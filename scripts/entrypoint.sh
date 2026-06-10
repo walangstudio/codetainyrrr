@@ -51,19 +51,84 @@ for _f in "$HOME/.zshrc" "$HOME/.config/zsh/extra.zsh" "$HOME/.config/starship.t
     fi
 done
 
-# Running as dev user — install the selected CLI/tools/plugins via the engine,
-# then drop to an interactive shell. Selection arrives as env from
-# `codetainyrrr task run` (.env CSV vars). Install failures don't block the shell:
-# the engine collects per-key failures, and a broken optional tool must not
-# make the container unusable (matches the prior binary's behaviour).
+# Running as dev user — reconcile the desired CLI/tools/plugins against what is
+# actually installed in this home volume, then drop to an interactive shell.
+# Selection arrives as env from `codetainyrrr task run` (.env CSV vars).
+# Failures are non-fatal: a broken optional tool must not make the container
+# unusable (matches the prior binary's behaviour).
 _cli="${CODING_CLI:-claude}"
 _tools="$(printf '%s' "${INSTALL_TOOLS:-}" | tr ',' ' ')"
 _plugins="$(printf '%s' "${INSTALL_PLUGINS:-}" | tr ',' ' ')"
-# shellcheck disable=SC2086
-codetainyrrr install $_cli $_tools $_plugins \
-    --config /etc/codetainyrrr/installer.toml \
-    --catalog /etc/codetainyrrr/catalog.json \
-    || echo "codetainyrrr: some installs failed (see above); continuing" >&2
+
+# Phase 2: add/remove reconcile.
+#
+# desired_set  = unique sorted keys from env (CODING_CLI + INSTALL_TOOLS + INSTALL_PLUGINS)
+# installed_set = unique sorted basenames from sentinel files written by the
+#                 engine under ~/.local/share/codetainyrrr/{cli,tools,plugins}/
+#
+# Set arithmetic (using comm -23 on sorted newline lists):
+#   to_uninstall = installed - desired   (keys to remove)
+#   to_install   = desired   - installed (keys to add; install is idempotent so
+#                                         passing already-installed keys is fine)
+#
+# Example (illustrates the comm -23 logic):
+#   installed = "claude node ripgrep ts"
+#   desired   = "claude node ts"
+#   to_uninstall = "ripgrep"   (comm -23 installed desired)
+#   to_install   = ""          (comm -23 desired installed)
+#
+# Another example:
+#   installed = "claude node"
+#   desired   = "gemini node ripgrep"
+#   to_uninstall = "claude"    (comm -23 installed desired)
+#   to_install   = "gemini ripgrep" (comm -23 desired installed)
+
+_sentinel_base="$HOME/.local/share/codetainyrrr"
+
+# Build desired set: split on commas and spaces, strip blanks, sort -u.
+_desired_set="$(printf '%s\n' $_cli $_tools $_plugins \
+    | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' \
+    | grep -v '^$' | sort -u)"
+
+# Build installed set from sentinel files; no-op when dirs absent.
+_installed_set="$(ls \
+    "${_sentinel_base}/cli/"*.installed \
+    "${_sentinel_base}/tools/"*.installed \
+    "${_sentinel_base}/plugins/"*.installed \
+    2>/dev/null \
+    | while IFS= read -r _f; do basename "$_f" .installed; done \
+    | sort -u)"
+
+# Compute diffs.  comm requires both inputs to be sorted (they are).
+_to_uninstall="$(comm -23 \
+    <(printf '%s\n' ${_installed_set}) \
+    <(printf '%s\n' ${_desired_set}) \
+    | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+
+_to_install="$(comm -23 \
+    <(printf '%s\n' ${_desired_set}) \
+    <(printf '%s\n' ${_installed_set}) \
+    | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+
+# Uninstall removed keys first (before installing new ones).
+if [ -n "${_to_uninstall}" ]; then
+    echo "codetainyrrr: uninstalling removed keys: ${_to_uninstall}" >&2
+    # shellcheck disable=SC2086
+    codetainyrrr uninstall ${_to_uninstall} \
+        --config /etc/codetainyrrr/installer.toml \
+        --catalog /etc/codetainyrrr/catalog.json \
+        || echo "codetainyrrr: some uninstalls failed (see above); continuing" >&2
+fi
+
+# Install desired keys (engine skips keys already sentinel-marked).
+if [ -n "${_to_install}" ]; then
+    echo "codetainyrrr: installing keys: ${_to_install}" >&2
+    # shellcheck disable=SC2086
+    codetainyrrr install ${_to_install} \
+        --config /etc/codetainyrrr/installer.toml \
+        --catalog /etc/codetainyrrr/catalog.json \
+        || echo "codetainyrrr: some installs failed (see above); continuing" >&2
+fi
 
 # Readiness marker — `codetainyrrr task wait-ready` polls this.
 touch /tmp/codetainyrrr.ready
