@@ -4,12 +4,16 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - 2026-06-10
+## [0.2.0] - 2026-06-11
 
-Engine pin bumped to insmaller **v0.14.0**.
+Engine pin bumped to insmaller **v0.15.0**.
 
 ### Added
 
+- **Friendly setup labels.** Wizard questions and the post-setup summary now
+  show readable names ("Container runtime", "AI assistant", "OpenAI API key",
+  "Project directory") instead of raw variable keys (`CODETAINYRRR_RUNTIME`,
+  `CODING_CLI`, …), via the engine's new field `label` (insmaller v0.15.0).
 - **Switching a container's CLI/tools now uninstalls the removed ones.** On
   start, the container reconciles the desired set (`CODING_CLI` + `INSTALL_TOOLS`
   + `INSTALL_PLUGINS`) against what is installed (engine sentinels in the home

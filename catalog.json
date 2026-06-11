@@ -5,7 +5,7 @@
       "name": "Aider",
       "description": "AI pair programmer — great for git workflows (Python)",
       "requires_input": [
-        { "id": "OPENAI_API_KEY", "type": "secret", "required": false }
+        { "id": "OPENAI_API_KEY", "type": "secret", "required": false, "label": "OpenAI API key" }
       ],
       "provides_command": "aider",
       "dependencies": ["uv"],
@@ -16,7 +16,7 @@
       "name": "Claude Code",
       "description": "Anthropic's official agentic CLI",
       "requires_input": [
-        { "id": "ANTHROPIC_API_KEY", "type": "secret", "required": false }
+        { "id": "ANTHROPIC_API_KEY", "type": "secret", "required": false, "label": "Anthropic API key" }
       ],
       "provides_command": "claude",
       "install": "curl -fsSL https://claude.ai/install.sh | bash",
@@ -35,7 +35,7 @@
       "name": "OpenAI Codex",
       "description": "OpenAI agent CLI",
       "requires_input": [
-        { "id": "OPENAI_API_KEY", "type": "secret", "required": false }
+        { "id": "OPENAI_API_KEY", "type": "secret", "required": false, "label": "OpenAI API key" }
       ],
       "provides_command": "codex",
       "dependencies": ["node"],
@@ -46,7 +46,7 @@
       "name": "Google Gemini",
       "description": "Google Gemini CLI",
       "requires_input": [
-        { "id": "GEMINI_API_KEY", "type": "secret", "required": false }
+        { "id": "GEMINI_API_KEY", "type": "secret", "required": false, "label": "Gemini API key" }
       ],
       "provides_command": "gemini",
       "dependencies": ["node"],
@@ -81,7 +81,7 @@
       "name": "Pi",
       "description": "Pi coding agent (Anthropic-powered)",
       "requires_input": [
-        { "id": "ANTHROPIC_API_KEY", "type": "secret", "required": false }
+        { "id": "ANTHROPIC_API_KEY", "type": "secret", "required": false, "label": "Anthropic API key" }
       ],
       "provides_command": "pi",
       "dependencies": ["node"],

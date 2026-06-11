@@ -18,6 +18,7 @@ description = "Create a new container, or edit an existing one's settings. Edit 
 [[page.field]]
 id = "CT_MODE"
 type = "single_select"
+label = "Mode"
 options = ["new", "edit"]
 default = "new"
 
@@ -29,6 +30,7 @@ condition = "${CT_MODE} == 'edit'"
 [[page.field]]
 id = "CONTAINER_NAME"
 type = "single_select"
+label = "Container"
 source = "files:~/.codetainyrrr/containers/*.env"
 
 [[page]]
@@ -38,6 +40,7 @@ description = "Which container engine to use. Podman is recommended (daemonless,
 [[page.field]]
 id = "CODETAINYRRR_RUNTIME"
 type = "single_select"
+label = "Container runtime"
 options = ["auto", "podman", "docker"]
 default = "auto"
 
@@ -48,6 +51,7 @@ description = "Which CLI should run inside the container?"
 [[page.field]]
 id = "CODING_CLI"
 type = "single_select"
+label = "AI assistant"
 source = "catalog.clis"
 default = "claude"
 # New containers name themselves here; on edit the name was chosen on the pick
@@ -56,6 +60,7 @@ default = "claude"
 [[page.field]]
 id = "CONTAINER_NAME"
 type = "text"
+label = "Container name"
 condition = "${CT_MODE} == 'new'"
 prompt = "Container name (also the volume + settings-file name):"
 default = "codetainyrrr"
@@ -69,12 +74,14 @@ description = "Optionally mount a host folder as /workspace. Decline both for a 
 [[page.field]]
 id = "PROJECT_DIR"
 type = "path"
+label = "Project directory"
 prompt = "Path to your project (absolute path):"
 default = ""
 required = false
 [[page.field]]
 id = "EXTRA_WORKSPACES"
 type = "text"
+label = "Extra workspaces"
 prompt = "Extra paths (semicolon-separated):"
 default = ""
 required = false
