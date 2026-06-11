@@ -71,7 +71,7 @@ group_order      = [
   "Memory & Knowledge",
 ]
 intro_template   = "  codetainyrrr  ·  setup  "
-outro_template   = "Configuration saved to ~/.codetainyrrr/.env."
+outro_template   = "Saved to ~/.codetainyrrr/containers/{{ CONTAINER_NAME }}.env  ·  start it with: codetainyrrr task run {{ CONTAINER_NAME }}"
 
 [project.extra]
 license          = "MIT"
@@ -1299,10 +1299,31 @@ if ($choice -eq 'podman') {
     if (-not $ready) {
         Write-Host ""
         Write-Host "podman machine could not reach a running state." -ForegroundColor Red
-        Write-Host "Most common causes on Windows:" -ForegroundColor Red
-        Write-Host "  * An orphan 'win-sshproxy'/'gvproxy' process holds the SSH pipe." -ForegroundColor Red
-        Write-Host "  * Docker Desktop is running and holds the default Docker API pipe." -ForegroundColor Red
-        Write-Host "Try: quit Docker Desktop, then 'podman machine stop; podman machine start'." -ForegroundColor Red
+        # The #1 silent cause on Windows: the WSL Hyper-V firewall (often forced
+        # by 3rd-party security suites like Avast/Norton) blocks host->guest
+        # inbound, so the VM boots fine but the SSH transition never connects.
+        # Detect it: ActiveStore Block while the saved default is Allow == an app
+        # is overriding it at runtime.
+        $fwBlocked = $false
+        try {
+            $fw = Get-NetFirewallHyperVVMSetting -PolicyStore ActiveStore -ErrorAction Stop |
+                  Where-Object { $_.Name -eq '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' }
+            if ($fw -and $fw.DefaultInboundAction -eq 'Block') { $fwBlocked = $true }
+        } catch {}
+        if ($fwBlocked) {
+            Write-Host "Cause: the WSL Hyper-V firewall is BLOCKING host->guest traffic" -ForegroundColor Red
+            Write-Host "(commonly forced by Avast/Norton/3rd-party firewalls)." -ForegroundColor Red
+            Write-Host "Fix (durable): allow the 'vEthernet (WSL ...)' adapter in your firewall app," -ForegroundColor Yellow
+            Write-Host "  or run elevated: Set-NetFirewallHyperVVMSetting -Name '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -DefaultInboundAction Allow; wsl --shutdown" -ForegroundColor Yellow
+            Write-Host "Or just use Docker: re-run setup and pick 'docker'." -ForegroundColor Yellow
+        } else {
+            Write-Host "Most common causes on Windows:" -ForegroundColor Red
+            Write-Host "  * An orphan 'win-sshproxy'/'gvproxy' process holds the SSH pipe." -ForegroundColor Red
+            Write-Host "  * Docker Desktop is running and holds the default Docker API pipe." -ForegroundColor Red
+            Write-Host "  * A firewall/VPN (Avast, Norton, corporate) blocks the WSL adapter." -ForegroundColor Red
+            Write-Host "Try: quit Docker Desktop, then 'podman machine stop; podman machine start'." -ForegroundColor Red
+            Write-Host "Or just use Docker: re-run setup and pick 'docker'." -ForegroundColor Red
+        }
         Write-Host "Logs: podman machine logs" -ForegroundColor Red
         exit 1
     }

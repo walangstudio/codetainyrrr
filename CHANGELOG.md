@@ -6,7 +6,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.2.0] - 2026-06-11
 
-Engine pin bumped to insmaller **v0.15.0**.
+Engine pin bumped to insmaller **v0.16.0**.
 
 ### Added
 
@@ -14,6 +14,19 @@ Engine pin bumped to insmaller **v0.15.0**.
   show readable names ("Container runtime", "AI assistant", "OpenAI API key",
   "Project directory") instead of raw variable keys (`CODETAINYRRR_RUNTIME`,
   `CODING_CLI`, …), via the engine's new field `label` (insmaller v0.15.0).
+- **Cleaner setup front door.** The new/edit step now reads "Create a new
+  container / Edit an existing container" (engine `option_labels`), and the
+  internal mode flag no longer leaks into the summary or the saved `.env`
+  (engine `transient`). The outro names the exact per-container file written and
+  the `task run <name>` to start it.
+
+### Fixed
+
+- **Clearer podman failure on Windows.** When the WSL Hyper-V firewall is
+  blocking host→guest (commonly forced by Avast/Norton), `install-runtime` now
+  detects it and prints the durable fix (allow the WSL adapter / elevated
+  `Set-NetFirewallHyperVVMSetting … Allow`) instead of only blaming Docker
+  Desktop. Suggests Docker as the no-config alternative.
 - **Switching a container's CLI/tools now uninstalls the removed ones.** On
   start, the container reconciles the desired set (`CODING_CLI` + `INSTALL_TOOLS`
   + `INSTALL_PLUGINS`) against what is installed (engine sentinels in the home

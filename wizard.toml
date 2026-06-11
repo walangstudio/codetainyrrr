@@ -18,8 +18,13 @@ description = "Create a new container, or edit an existing one's settings. Edit 
 [[page.field]]
 id = "CT_MODE"
 type = "single_select"
+prompt = "What do you want to do?"
 label = "Mode"
 options = ["new", "edit"]
+option_labels = ["Create a new container", "Edit an existing container"]
+# Navigation flag only: drives the new/edit branch, never saved or shown in the
+# summary (engine >= 0.16.0).
+transient = true
 default = "new"
 
 [[page]]
